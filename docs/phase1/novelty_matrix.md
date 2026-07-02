@@ -16,4 +16,4 @@ This document provides a capability matrix to visually isolate the core innovati
 
 As shown in the matrix above, while prior work individually optimizes routing (e.g. RouteLLM, FrugalGPT) or local context memory (e.g. vLLM, StreamingLLM), they do so for single-session cloud APIs or homogeneous high-end GPU cluster instances. 
 
-LiteAgent's primary scientific novelty is the **co-design of complexity-aware routing and a three-tier persistent KV cache hierarchy explicitly tailored for multi-agent LLM workloads running across heterogeneous edge-workstation hardware.**
+Our literature review did not identify prior work that combines these capabilities in the same edge-oriented multi-agent setting. LiteAgent addresses this gap through the co-design of complexity-aware routing and a three-tier persistent KV cache hierarchy explicitly tailored for multi-agent LLM workloads running across heterogeneous edge-workstation hardware.
