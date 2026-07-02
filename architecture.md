@@ -13,7 +13,7 @@ For more details, see [hardware_inventory.md](file:///d:/Coding/liteagent/docs/p
 We recommend three quantized model tiers running via Ollama:
 - **Small (Edge)**: `llama3.2:1b` (~1.3 GB file size, ~2 GB RAM footprint)
 - **Medium (Edge/Workstation)**: `llama3.2:3b` (~2.0 GB file size, ~3.5 GB RAM/VRAM footprint)
-- **Large (Workstation)**: `qwen2.5:14b` (~9.0 GB file size, ~12 GB VRAM footprint)
+- **Large (Workstation)**: `llama3.1:8b` (~4.7 GB file size, ~8 GB VRAM footprint)
 For more details, see [model_manifest.md](file:///d:/Coding/liteagent/docs/phase0/model_manifest.md).
 
 ## 4. Agent Definitions
@@ -43,5 +43,5 @@ For details on inputs/outputs and metrics, see [system_contract.md](file:///d:/C
 | Environment and package manager: uv | Standard tool for reproducible environment management and speed. | 0 | 2026-07-02 |
 | Small Model: `llama3.2:1b` | Selected for low-latency edge inference on Raspberry Pi 5 CPU. | 0 | 2026-07-02 |
 | Medium Model: `llama3.2:3b` | Selected for intermediate reasoning capabilities. Fits comfortably in 8GB Pi RAM and workstation VRAM. | 0 | 2026-07-02 |
-| Large Model: `qwen2.5:14b` | Highest precision model that can run completely in 12GB VRAM without CPU offload. | 0 | 2026-07-02 |
+| Large Model: `llama3.1:8b` | Swapped from 14B to 8B (Llama 3.1) to preserve VRAM headroom (~7GB free on RTX 5070) for KV-cache tiering experiments and maintain consistency with abstract's "7B/8B tier". | 0 | 2026-07-02 |
 | Agent Set: Planner, Retriever, Executor, Critic | Custom architecture matching the core requirements of GSM8K, HotpotQA, and HumanEval. | 0 | 2026-07-02 |

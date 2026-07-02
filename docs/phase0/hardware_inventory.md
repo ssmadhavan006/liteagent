@@ -17,7 +17,10 @@ This document lists the hardware components and specifications for both the loca
 
 ## Storage Benchmark Method for Raspberry Pi 5 (To be run by user)
 
-To measure the actual storage read/write speed on the Raspberry Pi 5 to back the cold cache tier, run the following commands on the Pi:
+To measure the actual storage read/write speed on the Raspberry Pi 5 to back the cold cache tier, run the following commands on the Pi. 
+
+> [!IMPORTANT]
+> The benchmark results depend heavily on the storage medium used. Please note whether the Pi 5 is running off a standard **microSD card** (expected ~20–80 MB/s) or a **PCIe NVMe SSD HAT** (expected ~300–800 MB/s), as this impacts cache eviction/swap latencies. Specify the medium alongside your results.
 
 ### Write Speed
 ```bash
