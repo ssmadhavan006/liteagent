@@ -1,0 +1,30 @@
+# LiteAgent local rules and progress files (requested to keep local)
+rules.md
+progress.md
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Model weights and downloads
+*.gguf
+*.bin
+*.pt
+*.pth
+*.safetensors
+models/
+weights/
+
+# Local configuration and secret files
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
