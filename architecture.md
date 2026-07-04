@@ -25,16 +25,59 @@ LiteAgent implements four specialized agent roles to handle target tasks:
 For details on inputs/outputs and metrics, see [system_contract.md](file:///d:/Coding/liteagent/docs/phase0/system_contract.md).
 
 ## 5. Complexity Router
-<TODO — filled in Phase 2/3>
+The Complexity Router dynamically classifies incoming queries into three complexity tiers (Low, Medium, High) using a sub-millisecond logistic regression model that evaluates prompt length, math operators, code syntax flags, and logical density. 
+*   **Low Complexity**: Routed to the Small tier (`llama3.2:1b` on Raspberry Pi 5). Bypasses the Planner and Critic agents (only the Executor or Retriever runs).
+*   **Medium Complexity**: Routed to the Medium tier (`llama3.2:3b` on Raspberry Pi 5). Bypasses the Critic agent (Planner, Retriever, and Executor cooperate).
+*   **High Complexity**: Routed to the Large tier (`llama3.1:8b` on Workstation via gRPC). Runs the full agent loop (Planner, Retriever, Executor, Critic) with no pruning.
+The thresholds are derived from a single master parameter $\Theta \in [0.0, 1.0]$ swept during evaluation.
 
 ## 6. Three-Tier KV-Cache Manager
-<TODO — filled in Phase 2/4>
+The cache manager is built on `llama-cpp-python` / `llama.cpp` serialization primitives (`save_state()` / `load_state()`) which serialize running contexts as binary byte arrays, completely bypassing prefill times.
+*   **Hot Cache (VRAM/RAM)**: Holds the active context slot (exactly 1 active slot per model instance to prevent OOM errors).
+*   **Standby Cache (Host RAM)**: Stores serialized context bytes in system RAM for fast sub-millisecond swapping.
+*   **Cold Cache (SSD)**: Serializes context states to NVMe SSD disk as `.bin` files.
+Eviction from Standby RAM to NVMe SSD follows a **Task-Affinity Aware Least Recently Used (TA-LRU)** algorithm, protecting cached contexts of agent roles predicted to be called next.
 
 ## 7. Edge–Workstation Communication (gRPC)
-<TODO — filled in Phase 2/5>
+Coordination between the edge device and workstation is managed over a lightweight gRPC channel. Due to bandwidth constraints, serialized KV cache states (60–220 MB) are **never** transmitted across the network:
+*   At 100 Mbps, transferring a 200 MB state takes **16.0 seconds**, which is 53x slower than GPU prefill.
+*   Even at 1 Gbps, transferring takes **1.6 seconds**, which exceeds GPU prefill times.
+Instead, the Pi 5 dispatches tasks sending only the prompt text and `session_id`. The workstation resolves the cache key locally, loads the local context state from its NVMe SSD, performs inference, saves the updated state locally, and returns only the output text and performance metrics.
 
 ## 8. Data Flow Diagram
-<TODO — filled in Phase 2, as a text/mermaid diagram, not an image file>
+```mermaid
+graph TD
+    A[Task Request] --> B[Complexity Router]
+    
+    %% Complexity Routing Decisions
+    B -->|S_c < theta_low| C[Small Model: Llama 3.2 1B]
+    B -->|theta_low <= S_c < theta_high| D[Medium Model: Llama 3.2 3B]
+    B -->|S_c >= theta_high| E[gRPC Client on Edge]
+    
+    subgraph "Raspberry Pi 5 (Edge)"
+        C --> F[Edge Cache Manager]
+        D --> F
+        F <--> G[(Edge Host RAM)]
+        F <--> H[(Edge SD/SSD)]
+        C --> I[Active Agent: Executor/Retriever]
+        D --> J[Active Agents: Planner+Retriever+Executor]
+    end
+    
+    E -->|gRPC dispatch: Prompt + Session ID| K[gRPC Server on Workstation]
+    
+    subgraph "PC Workstation"
+        K --> L[Large Model: Llama 3.1 8B]
+        L --> M[Workstation Cache Manager]
+        M <--> N[(PC VRAM / Host RAM)]
+        M <--> O[(PC NVMe SSD)]
+        L --> P[Active Agents: Planner+Retriever+Executor+Critic]
+    end
+    
+    I --> Q[Task Result]
+    J --> Q
+    P -->|gRPC response| K
+    K --> Q
+```
 
 ## 9. Design Decisions Log
 | Decision | Rationale | Phase | Date |
