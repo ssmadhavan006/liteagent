@@ -40,3 +40,21 @@ ollama show --modelfile llama3.2:3b
 ollama show --modelfile llama3.1:8b
 ```
 Please paste the output of these commands or confirm completion to mark them as `Verified` in this manifest.
+
+---
+
+## Dynamic GGUF Path Resolution for llama-cpp-python
+
+Since `llama-cpp-python` loads raw GGUF files directly and cannot query the Ollama server API, LiteAgent implements a dynamic **Ollama Model Blob Resolver**. This utility allows the model store to remain unified under Ollama while enabling direct file loading.
+
+### Mechanism
+Ollama stores GGUFs as content-addressable blobs in its models directory (`D:\Ollama\Models\blobs\sha256-<hash>` on Windows, and `~/.ollama/models/blobs/sha256-<hash>` on the Pi). 
+The resolver maps a model tag (e.g. `llama3.2:1b`) to its GGUF file path at runtime by:
+1.  Locating the JSON manifest file under the manifests directory:
+    `D:\Ollama\Models\manifests\registry.ollama.ai\library\<model_family>\<tag>`
+2.  Reading the manifest JSON and extracting the `digest` hash of the layer with `"mediaType": "application/vnd.ollama.image.model"`.
+3.  Constructing the GGUF file path:
+    `D:\Ollama\Models\blobs\sha256-<digest_hash>`
+4.  Passing this path directly to the `Llama` constructor of `llama-cpp-python`.
+
+This dynamic mapping prevents disk space duplication and ensures that any models downloaded via Ollama can be executed instantly in our cache-critical path.
