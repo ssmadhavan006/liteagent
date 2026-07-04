@@ -35,7 +35,13 @@ This document outlines the formal evaluation plan for LiteAgent, mapping core re
 *   **Goal**: Measure the context restoration speeds across cache hits, local RAM hits, SSD disk hits, and cold cache misses (re-computation), and verify the output-level losslessness of context restoration.
 *   **Setup**:
     *   *Latency Setup*: Simulate multi-agent conversational switches. Enforce cache eviction from VRAM to RAM, and RAM to SSD. Measure TTFT when loading context from each cache tier.
-    *   *Losslessness Setup*: Generate tokens under a fresh prefill execution, then restore context via `load_state()` on identical input and verify character-by-character text identity of the generated sequences.
+    *   *Deterministic Cache Restoration Test*: Both the fresh-prefill generation and the restored-context generation must execute under identical, strict deterministic decoding configurations:
+        *   `temperature = 0`
+        *   `top_k = 1` (greedy sampling)
+        *   `top_p` disabled
+        *   Fixed RNG seed (`seed = 42`)
+        *   Identical stop tokens and sampling configurations
+    *   Compare the resulting generated tokens, generated text, and token count. Verify character-by-character text and token identity to confirm that cache restoration is mathematically lossless.
 *   **Key Plot**: TTFT latency breakdown per cache tier, and a binary pass/fail verification table for restored output accuracy.
 
 ### Experiment 3: Co-Design Ablations (Targets H3)
