@@ -36,7 +36,7 @@ The cache manager is built on `llama-cpp-python` / `llama.cpp` serialization pri
 *   **Hot Cache (VRAM/RAM)**: Holds the active context slot (exactly 1 active slot per model instance to prevent OOM errors).
 *   **Standby Cache (Host RAM)**: Stores serialized context bytes in system RAM for fast sub-millisecond swapping.
 *   **Cold Cache (SSD)**: Serializes context states to NVMe SSD disk as `.bin` files.
-Eviction from Standby RAM to NVMe SSD follows a **Task-Affinity Aware Least Recently Used (TA-LRU)** algorithm, protecting cached contexts of agent roles predicted to be called next.
+Eviction from Standby RAM to NVMe SSD follows a **Priority-Weighted Least Recently Used (PW-LRU)** algorithm, protecting cached contexts based on static agent role priorities (`Critic` = 1.0, `Executor` = 0.8, `Planner` = 0.5, `Retriever` = 0.3) to safeguard critical reasoning loops.
 
 ## 7. Edge–Workstation Communication (gRPC)
 Coordination between the edge device and workstation is managed over a lightweight gRPC channel. Due to bandwidth constraints, serialized KV cache states (60–220 MB) are **never** transmitted across the network:
@@ -92,5 +92,5 @@ graph TD
 | Evaluation Mapping Plan (`evaluation_plan.md`) | Structured to prevent experiment drift and define clear baseline comparators (e.g. static routing, flat cache) for Phase 6. | 1 | 2026-07-02 |
 | Engine Choice: `llama-cpp-python` / `llama.cpp` | Bypassed Ollama API to utilize raw state serialization (`save_state()` / `load_state()`) for true three-tier cache swapping. | 2 | 2026-07-04 |
 | KV-Cache Local-Only Boundary | Serialized cache states are kept strictly local to each device and never cross the network to avoid severe bandwidth bottlenecks. | 2 | 2026-07-04 |
-| Cache Eviction: Task-Affinity Aware LRU (TA-LRU) | Evicts states from RAM to SSD based on both last access time and transition probability between agent roles to prevent thrashing. | 2 | 2026-07-04 |
+| Cache Eviction: Priority-Weighted LRU (PW-LRU) | Evicts states from RAM to SSD based on both last access time and static agent role priorities (`Critic` = 1.0, `Executor` = 0.8, `Planner` = 0.5, `Retriever` = 0.3) to protect critical active agent states. | 2 | 2026-07-04 |
 
