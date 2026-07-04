@@ -21,12 +21,12 @@ class ThreeTierCacheManager:
         self.standby_cache = {}          # Dict[session_key, bytes] (Host RAM)
         self.metadata_store = {}         # Dict[session_key, CacheStateMetadata]
         
-        # Transition Affinity Matrix A[From_Role, To_Role]
-        self.affinity_matrix = {
-            "Planner": {"Retriever": 0.8, "Executor": 0.2, "Critic": 0.0},
-            "Retriever": {"Executor": 0.9, "Planner": 0.1, "Critic": 0.0},
-            "Executor": {"Critic": 0.95, "Planner": 0.05, "Retriever": 0.0},
-            "Critic": {"Planner": 0.4, "Executor": 0.4, "Retriever": 0.2}
+        # Static role priorities (PW-LRU)
+        self.role_priorities = {
+            "Critic": 1.0,
+            "Executor": 0.8,
+            "Planner": 0.5,
+            "Retriever": 0.3
         }
 
     def compute_cache_key(self, model_name: str, system_prompt: str, context_history: list[str]) -> str:
@@ -74,10 +74,9 @@ class ThreeTierCacheManager:
 
     def evict_standby_to_cold(self):
         """
-        Evicts a standby RAM state to SSD disk based on TA-LRU score
+        Evicts a standby RAM state to SSD disk based on PW-LRU score
         """
         current_time = time.time()
-        current_active_agent = get_current_running_agent_role()
         
         highest_score = -1.0
         victim_key = None
@@ -88,13 +87,11 @@ class ThreeTierCacheManager:
                 
             t_elapsed = current_time - meta.last_accessed
             
-            # Lookup affinity factor
-            from_role = current_active_agent
-            to_role = meta.agent_role
-            affinity = self.affinity_matrix.get(from_role, {}).get(to_role, 0.0)
+            # Lookup role priority weight
+            w_agent = self.role_priorities.get(meta.agent_role, 0.0)
             
-            # Compute virtual TA-LRU score
-            score = t_elapsed * (1.0 - affinity)
+            # Compute virtual PW-LRU score
+            score = t_elapsed * (1.0 - w_agent)
             
             if score > highest_score:
                 highest_score = score
