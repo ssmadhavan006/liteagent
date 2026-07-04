@@ -51,25 +51,30 @@ The serialized state size is determined by the context size $N_{ctx}$ and model 
 
 ---
 
-## 3. Eviction Policy: Task-Affinity Aware LRU (TA-LRU)
+## 3. Eviction Policy: Priority-Weighted LRU (PW-LRU)
 
-To prevent cache thrashing during multi-agent context switching, we implement a **Task-Affinity Aware Least Recently Used (TA-LRU)** eviction heuristic.
+To prevent cache thrashing during multi-agent context switching, we implement a **Priority-Weighted Least Recently Used (PW-LRU)** eviction heuristic.
 
 ### Heuristic Rationale
-Traditional LRU evicts states based strictly on the time of last access. However, multi-agent workflows (Planner $\rightarrow$ Retriever $\rightarrow$ Executor $\rightarrow$ Critic) have highly predictable sequence transitions. For example, if the `Executor` agent has just completed, there is a very high probability that the `Critic` agent will be invoked next.
+Traditional LRU evicts states based strictly on the time of last access. However, multi-agent workflows assign unequal importance to active agent states. For instance, the `Critic` agent state requires high retention since it performs iterative verification loops. Conversely, the `Retriever` fetches static contexts that are easily reloaded or recalculated if evicted. Assigning a static priority weight to each role guarantees that critical reasoning states are shielded from premature eviction without needing transition probability training data.
+
+### Priority Weights Allocation
+We assign a static priority weight $w_{agent} \in [0.0, 1.0]$ to each agent role:
+*   **`Critic`**: Priority $1.0$ (High priority; protect during active review steps).
+*   **`Executor`**: Priority $0.8$ (Medium-high priority).
+*   **`Planner`**: Priority $0.5$ (Medium priority).
+*   **`Retriever`**: Priority $0.3$ (Low priority; easily re-retrieved or re-computed).
 
 ### Mathematical Formulation
 When Tier 2 (Standby RAM) reaches capacity, the cache manager computes a virtual recency score $V_s$ for each cached state:
 
-$$V_s = t_{elapsed} \cdot (1.0 - A[Agent_{current}, Agent_{cached}])$$
+$$V_s = t_{elapsed} \cdot (1.0 - w_{agent})$$
 
 where:
 *   $t_{elapsed}$ is the time elapsed since the state was last accessed.
-*   $Agent_{current}$ is the agent role that is currently running.
-*   $Agent_{cached}$ is the agent role associated with the cached state.
-*   $A[A_i, A_j] \in [0.0, 1.0]$ is the transition affinity matrix defining the probability of transitioning from agent $A_i$ to agent $A_j$.
+*   $w_{agent}$ is the static priority weight of the agent role associated with the cached state.
 
-**The state with the highest $V_s$ (highest elapsed time modified by the lowest transition affinity) is evicted to Tier 3 (Cold SSD).**
+**The state with the highest $V_s$ (longest idle time combined with the lowest role priority) is evicted to Tier 3 (Cold SSD).**
 
 ---
 
@@ -83,4 +88,4 @@ When an agent execution request is dispatched:
     *   **Hit in Tier 2 (Standby)**: Retrieve byte array from memory, call `load_state()`, and execute.
     *   **Hit in Tier 3 (Cold)**: Read binary file from NVMe SSD, copy to Standby memory, call `load_state()`, and execute.
     *   **Cache Miss**: Trigger full prefill, execute, and write back to Tier 1/2.
-3.  **Post-Execution**: Save state using `save_state()`, update access timestamp, and run the TA-LRU eviction sequence if Standby RAM limit is exceeded.
+3.  **Post-Execution**: Save state using `save_state()`, update access timestamp, and run the PW-LRU eviction sequence if Standby RAM limit is exceeded.
