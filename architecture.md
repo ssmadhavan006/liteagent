@@ -70,16 +70,23 @@ The gRPC service schema (`src/liteagent/network/protos/coordinator.proto`) expos
 *   `Ping`: Health check and protocol/software compatibility verification (sends `protocol_version` and returns `compatible`, `model_version`, `llama_cpp_version`, and `liteagent_version`).
 *   `DispatchTask`: Executes remote High-complexity tasks on the Large-tier workstation.
 
-### 2. Clock-Drift-Independent Latency Profiling
+### 2. Clock-Drift-Independent Latency Profiling: Loopback Baseline
 To evaluate communication RTT delay without requiring synchronized edge/workstation system clocks, we track relative local elapsed durations:
 $$\text{communication\_overhead\_ms} = \text{client\_e2e} - (\text{client\_serialize} + \text{server\_queue} + \text{server\_compute} + \text{server\_serialize} + \text{client\_deserialize})$$
-This residual reports the pure transport/network/scheduling overhead, preventing clock drift from producing negative values.
+This residual reports the pure transport/network/scheduling overhead, preventing clock drift from producing negative values. 
+
+In loopback (same-machine) testing, this value was calibrated as a baseline of **4.93 ms**, representing the pure serialization and serialization-framework overhead. Actual physical LAN (Wi-Fi/Ethernet) runs will append TCP handshakes and physical transport RTT overhead to this baseline.
 
 ### 3. Policy-Driven Network Fallbacks
 If the gRPC client encounters network exceptions or connection timeouts, a configurable `fallback_policy` is triggered:
 *   `medium_local`: Gracefully degrades execution to the local Medium-tier model (`llama3.2:3b`) on the edge with local cache swaps, logging a `FALLBACK` event to prevent crash failures.
 *   `fail`: Immediately fails the task and propagates a connection exception.
 *   `retry_then_medium`: Retries the connection (default = 1 retry) before falling back to `medium_local`.
+
+### 4. Edge Resource Contention & Thread Starvation
+When the edge device (Raspberry Pi 5) executes local inference on its CPU, `llama.cpp` saturates all configured cores. To prevent thread starvation of the background gRPC network polling threads (which could lead to connection drops or socket timeouts due to the Python Global Interpreter Lock (GIL)), we enforce:
+*   **Thread Allocation**: Local CPU inference thread count must be capped at $N-1$ threads (where $N=4$ is the number of hardware cores on the Pi 5), leaving one core dedicated to handling network buffers and gRPC socket events.
+*   **Socket Tuning**: Active TCP keep-alives and generous connection timeout margins are configured on the client stubs.
 
 ## 8. Data Flow Diagram
 ```mermaid
