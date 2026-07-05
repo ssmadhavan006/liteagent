@@ -143,8 +143,17 @@ graph TD
 | Ablation Configuration Overrides | Implemented `routing_disabled` and `cache_disabled` as dispatcher toggles to verify component contributions on identical code paths. | 6 | 2026-07-05 |
 | Log Parity & Feature Flags | Logs include a `"baseline"` identifier and execution `"feature_flags"` to verify and align all baseline events automatically. | 6 | 2026-07-05 |
 | Expected Limit Cache Handling | Classified prefix cache exhaustion under `EXPECTED_LIMIT_REACHED` to distinguish normal capacity bounds from runtime failures. | 6 | 2026-07-05 |
+| Context size: 4096 & Timeout: 90s | Increased context size limit to 4096 and gRPC timeout to 90s to prevent out-of-context decode crashes on long HotpotQA prompts and double-eval retry collisions during CPU inference. | 7 | 2026-07-05 |
 
 
 ### Why not Ollama?
 Ollama provides convenient high-level inference APIs but does not expose tensor-level model state serialization required for persistent KV-cache research. LiteAgent therefore employs `llama-cpp-python` for model execution while optionally reusing Ollama-managed GGUF assets through the blob resolver to avoid redundant downloads.
+
+
+## 10. Evaluation Harness & Sandbox Security (Phase 7)
+LiteAgent includes a multi-dataset evaluation harness that isolates executions and profiles energy consumption:
+- **Metrics Tracked**: Extracts Single-Sample Pass@1 for HumanEval, Exact Match (EM) for GSM8K, and token-level Exact Match & F1 scores for HotpotQA.
+- **Subprocess-Level Security Sandboxing**: HumanEval code solutions are executed in isolated Python subprocesses (`python -E -I -S`) with stripped environment variables, strict timeouts, memory limits (RLIMIT_AS), and secondary import/file-write restrictions to prevent unintended system access.
+- **GPU Power Profiling**: Energy consumption is tracked by launching an independent background thread polling `nvidia-smi` every 100ms and integrating power draw over the execution window.
+
 
