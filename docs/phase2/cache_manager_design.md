@@ -49,6 +49,10 @@ The serialized state size is determined by the context size $N_{ctx}$ and model 
 *   **Tier 2 (Standby)**: Allocates up to 2.5 GB on the Pi 5 (holding ~30–40 saved states) and 16 GB on the Workstation (holding ~200–260 saved states).
 *   **Tier 3 (Cold)**: Allocates up to 50 GB on the local SSD, allowing hundreds of conversation checkpoints to be persisted across system power cycles.
 
+> [!IMPORTANT]
+> **Operational Constraint: n_ctx Consistency**
+> In `llama.cpp`, the memory layout of the saved state binary payload is tied directly to the `n_ctx` parameter used at model initialization. All sessions and agent interactions for a given model MUST use identical `n_ctx` parameters. Restoring a state file saved with `n_ctx=X` into a model instance initialized with `n_ctx=Y` (where $X \neq Y$) is an illegal boundary state and can result in silent cache memory alignment corruption or undefined logits.
+
 ---
 
 ## 3. Eviction Policy: Priority-Weighted LRU (PW-LRU)
