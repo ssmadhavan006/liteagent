@@ -2,6 +2,7 @@ import time
 import uuid
 import hashlib
 import re
+import threading
 from llama_cpp import Llama
 
 from liteagent.network.dispatch import TaskDispatcher
@@ -144,56 +145,65 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
         model_tag = "llama3.2:1b" if tier == "Small" else "llama3.2:3b"
         model_path = resolve_model_path(model_tag)
         
-        if model_tag not in self.local_models:
-            self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, verbose=False, seed=42)
-        llama = self.local_models[model_tag]
-        
-        # Load local cache state (bypassed since cache_disabled is True)
-        cache_hit_tier = "MISS"
-        
-        self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
-        
-        # Prefill execution
-        prefill_start = time.time()
-        llama.reset()
-        full_prompt = f"{system_prompt}\n{prompt}".encode("utf-8")
-        tokens = llama.tokenize(full_prompt)
-        llama.eval(tokens)
-        prefill_tokens = len(tokens)
+        # Load local model
+        with self.locks_lock:
+            if model_tag not in self.local_models:
+                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, verbose=False, seed=42)
+            if model_tag not in self.model_locks:
+                self.model_locks[model_tag] = threading.Lock()
+            llama = self.local_models[model_tag]
+            lock = self.model_locks[model_tag]
+
+        lock.acquire()
+        try:
+            # Load local cache state (bypassed since cache_disabled is True)
+            cache_hit_tier = "MISS"
             
-        prefill_latency_ms = (time.time() - prefill_start) * 1000.0
-        
-        # Generation loop
-        gen_start = time.time()
-        response_tokens = []
-        for _ in range(max_tokens):
-            logits = llama.eval_logits[-1]
-            next_token = logits.index(max(logits))
+            self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
             
-            if next_token == llama.token_eos():
-                break
+            # Prefill execution
+            prefill_start = time.time()
+            llama.reset()
+            full_prompt = f"{system_prompt}\n{prompt}".encode("utf-8")
+            tokens = llama.tokenize(full_prompt)
+            llama.eval(tokens)
+            prefill_tokens = len(tokens)
                 
-            response_tokens.append(next_token)
-            llama.eval([next_token])
+            prefill_latency_ms = (time.time() - prefill_start) * 1000.0
             
-        response_text = llama.detokenize(response_tokens).decode("utf-8", errors="ignore")
-        generation_latency_ms = (time.time() - gen_start) * 1000.0
-        
-        self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
-        
-        # Save cache locally (bypassed)
-        outcome = "FALLBACK_SUCCESS" if tier == "Large" else "SUCCESS"
-        self.log_event(request_id, "COMPLETED", {"outcome": outcome})
-        
-        return {
-            "response_text": response_text,
-            "tokens_generated": len(response_tokens),
-            "prefill_tokens": prefill_tokens,
-            "prefill_latency_ms": round(prefill_latency_ms, 2),
-            "generation_latency_ms": round(generation_latency_ms, 2),
-            "cache_hit_tier": cache_hit_tier,
-            "routed_tier": tier,
-            "executed_tier": tier,
-            "fallback_occurred": (tier == "Large"),
-            "request_id": request_id
-        }
+            # Generation loop
+            gen_start = time.time()
+            response_tokens = []
+            for _ in range(max_tokens):
+                logits = llama.eval_logits[-1]
+                next_token = logits.index(max(logits))
+                
+                if next_token == llama.token_eos():
+                    break
+                    
+                response_tokens.append(next_token)
+                llama.eval([next_token])
+                
+            response_text = llama.detokenize(response_tokens).decode("utf-8", errors="ignore")
+            generation_latency_ms = (time.time() - gen_start) * 1000.0
+            
+            self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
+            
+            # Save cache locally (bypassed)
+            outcome = "FALLBACK_SUCCESS" if tier == "Large" else "SUCCESS"
+            self.log_event(request_id, "COMPLETED", {"outcome": outcome})
+            
+            return {
+                "response_text": response_text,
+                "tokens_generated": len(response_tokens),
+                "prefill_tokens": prefill_tokens,
+                "prefill_latency_ms": round(prefill_latency_ms, 2),
+                "generation_latency_ms": round(generation_latency_ms, 2),
+                "cache_hit_tier": cache_hit_tier,
+                "routed_tier": tier,
+                "executed_tier": tier,
+                "fallback_occurred": (tier == "Large"),
+                "request_id": request_id
+            }
+        finally:
+            lock.release()
