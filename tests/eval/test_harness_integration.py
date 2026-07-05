@@ -8,22 +8,18 @@ class MockRunner:
     def __init__(self, response: str, fails_compile: bool = False):
         self.response = response
         self.fails_compile = fails_compile
-        
-    def dispatch_task(self, prompt: str) -> dict:
+
+    def execute_task(self, task: dict, session_id: str, system_prompt: str) -> dict:
         if self.fails_compile:
             raise RuntimeError("Mock runner compilation failure")
         return {
-            "response": self.response,
-            "operations_log": [
-                {
-                    "prefill_tokens": 10,
-                    "tokens_generated": 5,
-                    "cache_hit_tier": "STANDBY",
-                    "routed_tier": "Medium",
-                    "executed_tier": "Medium",
-                    "fallback_occurred": False
-                }
-            ]
+            "response_text": self.response,
+            "prefill_tokens": 10,
+            "tokens_generated": 5,
+            "cache_hit_tier": "STANDBY",
+            "routed_tier": "Medium",
+            "executed_tier": "Medium",
+            "fallback_occurred": False
         }
 
 def test_harness_gsm8k_integration():

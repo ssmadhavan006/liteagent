@@ -114,57 +114,53 @@ class EvaluationHarness:
         start_time = time.time()
         
         # Run inference
+        task_dict = {"prompt": prompt, "id": task_id}
+        session_id = f"session_{task_id}_{self.baseline_name}"
+        
         try:
-            res = runner.dispatch_task(prompt)
+            res = runner.execute_task(
+                task=task_dict,
+                session_id=session_id,
+                system_prompt=""
+            )
             latency_ms = (time.time() - start_time) * 1000.0
             energy_joules = self.power_tracker.stop()
             
-            response = res.get("response", "")
-            ops_log = res.get("operations_log", [])
+            response = res.get("response_text", "")
+            prefill_tokens = res.get("prefill_tokens", 0)
+            tokens_gen = res.get("tokens_generated", 0)
+            cache_hit_tier = res.get("cache_hit_tier", "NONE")
+            routed_tier = res.get("routed_tier", "NONE")
+            executed_tier = res.get("executed_tier", "NONE")
+            fallback_occurred = res.get("fallback_occurred", False)
             
         except Exception as e:
-            # Handle runtime errors in the model runner itself
             latency_ms = (time.time() - start_time) * 1000.0
             energy_joules = self.power_tracker.stop()
-            self._log_failure(
-                task_id=task_id,
-                dataset_index=dataset_index,
-                dataset=dataset,
-                category="FAILURE_ALLOCATION",
-                code="",
-                stderr=str(e),
-                timeout=False
-            )
-            raise e
-
-        # Extract system metrics from operation logs
-        prefill_tokens = sum(op.get("prefill_tokens", 0) for op in ops_log)
-        tokens_gen = sum(op.get("tokens_generated", 0) for op in ops_log)
-        
-        cache_hit_tier = "NONE"
-        routed_tier = "NONE"
-        executed_tier = "NONE"
-        fallback_occurred = False
-        
-        if ops_log:
-            # Aggregate or pick the representative metric
-            cache_hit_tier = ops_log[0].get("cache_hit_tier", "NONE")
-            routed_tier = ops_log[0].get("routed_tier", "NONE")
-            executed_tier = ops_log[-1].get("executed_tier", "NONE")
-            fallback_occurred = any(op.get("fallback_occurred", False) for op in ops_log)
-            # If Flat Cache baseline exhausted limit, operations log might record EXPECTED_LIMIT_REACHED
-            for op in ops_log:
-                if op.get("failure_category") == "EXPECTED_LIMIT_REACHED":
-                    self._log_failure(
-                        task_id=task_id,
-                        dataset_index=dataset_index,
-                        dataset=dataset,
-                        category="EXPECTED_LIMIT_REACHED",
-                        code=response,
-                        stderr="Flat Cache limit exceeded",
-                        timeout=False
-                    )
-                    return {"success": False, "reason": "EXPECTED_LIMIT_REACHED"}
+            
+            err_str = str(e)
+            if "EXPECTED_LIMIT_REACHED" in err_str:
+                self._log_failure(
+                    task_id=task_id,
+                    dataset_index=dataset_index,
+                    dataset=dataset,
+                    category="EXPECTED_LIMIT_REACHED",
+                    code="",
+                    stderr=err_str,
+                    timeout=False
+                )
+                return {"success": False, "reason": "EXPECTED_LIMIT_REACHED"}
+            else:
+                self._log_failure(
+                    task_id=task_id,
+                    dataset_index=dataset_index,
+                    dataset=dataset,
+                    category="FAILURE_ALLOCATION",
+                    code="",
+                    stderr=err_str,
+                    timeout=False
+                )
+                raise e
 
         # Calculate dataset-specific quality metrics
         quality_score = 0.0
