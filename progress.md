@@ -1,9 +1,9 @@
 # LiteAgent — Progress Log
 
 ## Current Status
-- **Active Phase:** Phase 6 — Baselines
+- **Active Phase:** Phase 7 — Benchmark & Metric Setup
 - **Last updated:** 2026-07-05
-- **Next immediate task:** Define baseline systems and RouteLLM reference implementations.
+- **Next immediate task:** Select and prepare subsets for GSM8K, HotpotQA, and HumanEval datasets.
 - **Blockers & Dependencies:**
   - `BLOCKED`: Real cross-device LAN testing pending Pi hardware availability. Must be resolved before Phase 8 (Full Evaluation Runs) begins. Loopback baseline stands in for development/testing only.
 
@@ -14,12 +14,41 @@
 - [x] Phase 3 — Complexity Router
 - [x] Phase 4 — Three-Tier KV-Cache Manager
 - [x] Phase 5 — Edge–Workstation Integration
-- [ ] Phase 6 — Baselines
+- [x] Phase 6 — Baselines
 - [ ] Phase 7 — Benchmark & Metric Setup
 - [ ] Phase 8 — Full Evaluation Runs
 - [ ] Phase 9 — Analysis & Ablations
 - [ ] Phase 10 — Paper Writing
 - [ ] Phase 11 — Review & Submission
+
+### 2026-07-05T22:45:00+05:30 — Phase 6 Completion
+- **What was done:** Created Phase 6 baseline inventory. Coded the Static Full-Pipeline baseline runner. Integrated routing-only and cache-only configurations as dispatcher runtime flags to prevent double implementation. Implemented a simplified linear utility RouteLLM-style heuristic router. Created a vLLM-inspired single-tier in-memory Flat Cache baseline with capacity exhaustion checks (`EXPECTED_LIMIT_REACHED`). Verified execution log parity automatically using structural JSON validation tests. Logged all baseline indicators and feature flags.
+- **Files touched:**
+  - [docs/phase6/baseline_inventory.md](file:///d:/Coding/liteagent/docs/phase6/baseline_inventory.md)
+  - [docs/phase6/baseline_results_dev.md](file:///d:/Coding/liteagent/docs/phase6/baseline_results_dev.md)
+  - [src/liteagent/baselines/static_full_pipeline.py](file:///d:/Coding/liteagent/src/liteagent/baselines/static_full_pipeline.py)
+  - [src/liteagent/baselines/ablation_configs.py](file:///d:/Coding/liteagent/src/liteagent/baselines/ablation_configs.py)
+  - [src/liteagent/baselines/routellm_heuristic_approx.py](file:///d:/Coding/liteagent/src/liteagent/baselines/routellm_heuristic_approx.py)
+  - [src/liteagent/baselines/vllm_prefix_cache_approx.py](file:///d:/Coding/liteagent/src/liteagent/baselines/vllm_prefix_cache_approx.py)
+  - [src/liteagent/network/dispatch.py](file:///d:/Coding/liteagent/src/liteagent/network/dispatch.py)
+  - [src/liteagent/network/server.py](file:///d:/Coding/liteagent/src/liteagent/network/server.py)
+  - [src/liteagent/network/client.py](file:///d:/Coding/liteagent/src/liteagent/network/client.py)
+  - [tests/baselines/test_ablations.py](file:///d:/Coding/liteagent/tests/baselines/test_ablations.py)
+  - [tests/baselines/test_flat_cache.py](file:///d:/Coding/liteagent/tests/baselines/test_flat_cache.py)
+  - [tests/baselines/test_parity.py](file:///d:/Coding/liteagent/tests/baselines/test_parity.py)
+  - [architecture.md](file:///d:/Coding/liteagent/architecture.md)
+  - [progress.md](file:///d:/Coding/liteagent/progress.md)
+- **Commands run (if any):**
+  - `uv run python -m pytest tests/baselines/`
+  - `uv run python -m pytest tests/`
+  - `uv run python scratch/dev_sanity_check.py`
+- **Decisions made:**
+  - Logged a custom `"baseline"` string identifier and execution `"feature_flags"` dict directly in every logging call site to allow downstream plotting simplicity.
+  - Classified prefix cache limit exhaustion under `EXPECTED_LIMIT_REACHED` to verify normal capacity thresholds.
+  - Explicitly defined RouteLLM-style baseline as a simplified heuristic to align architectural behavior comparisons rather than accuracy tuning.
+- **Verification:** Passed all 32 unit and integration tests. Sanity checks ran all systems successfully on GSM8K, HotpotQA, and HumanEval tasks.
+- **Blocked on / waiting for user:** physical Raspberry Pi 5 availability (blocked before Phase 8).
+- **Deferred to later phase:** physical cross-device measurements (to Phase 8).
 
 ### 2026-07-05T22:35:00+05:30 — Phase 5 Completion
 - **What was done:** Compiled gRPC coordinator protobuf schema (`coordinator.proto`) for Workstation models. Coded workstation coordinator servicer to cache model instances dynamically and execute tasks using the local `KVCacheManager`. Implemented edge coordinator client with model warmup request support and client-side serialization metric tracking. Implemented clock-drift-independent transport latency calculation. Coded policy-driven fallback dispatcher (options: `medium_local`, `fail`, `retry_then_medium`). Documented local loopback baseline measurements and edge thread starvation mitigations.
