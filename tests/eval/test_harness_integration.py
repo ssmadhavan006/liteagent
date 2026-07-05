@@ -9,7 +9,7 @@ class MockRunner:
         self.response = response
         self.fails_compile = fails_compile
 
-    def execute_task(self, task: dict, session_id: str, system_prompt: str) -> dict:
+    def execute_task(self, task: dict, session_id: str, system_prompt: str, max_tokens: int = 100) -> dict:
         if self.fails_compile:
             raise RuntimeError("Mock runner compilation failure")
         return {

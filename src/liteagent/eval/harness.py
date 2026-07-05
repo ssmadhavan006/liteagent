@@ -94,7 +94,8 @@ class EvaluationHarness:
         task_id: str,
         dataset_index: int,
         runner: Any,
-        task_item: Dict[str, Any]
+        task_item: Dict[str, Any],
+        max_tokens: int = 100
     ) -> Dict[str, Any]:
         """
         Executes a single benchmark task while polling GPU energy.
@@ -121,7 +122,8 @@ class EvaluationHarness:
             res = runner.execute_task(
                 task=task_dict,
                 session_id=session_id,
-                system_prompt=""
+                system_prompt="",
+                max_tokens=max_tokens
             )
             latency_ms = (time.time() - start_time) * 1000.0
             energy_joules = self.power_tracker.stop()
