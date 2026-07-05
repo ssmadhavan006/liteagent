@@ -25,11 +25,18 @@ LiteAgent implements four specialized agent roles to handle target tasks:
 For details on inputs/outputs and metrics, see [system_contract.md](file:///d:/Coding/liteagent/docs/phase0/system_contract.md).
 
 ## 5. Complexity Router
-The Complexity Router dynamically classifies incoming queries into three complexity tiers (Low, Medium, High) using a sub-millisecond logistic regression model that evaluates prompt length, math operators, code syntax flags, and logical density. 
-*   **Low Complexity**: Routed to the Small tier (`llama3.2:1b` on Raspberry Pi 5). Bypasses the Planner and Critic agents (only the Executor or Retriever runs).
-*   **Medium Complexity**: Routed to the Medium tier (`llama3.2:3b` on Raspberry Pi 5). Bypasses the Critic agent (Planner, Retriever, and Executor cooperate).
-*   **High Complexity**: Routed to the Large tier (`llama3.1:8b` on Workstation via gRPC). Runs the full agent loop (Planner, Retriever, Executor, Critic) with no pruning.
-The thresholds are derived from a single master parameter $\Theta \in [0.0, 1.0]$ swept during evaluation.
+The Complexity Router dynamically classifies incoming tasks into three model tiers (Small, Medium, Large) using a sub-millisecond Rule-Based Complexity Scorer that evaluates a Weighted Linear Complexity Function:
+$$S_c = \sigma(W \cdot X + b)$$
+Input features are normalized to $x'_i \in [0.0, 1.0]$ before applying weights, with length normalized via log-scaling to capture the sub-linear relationship between length and complexity. The scorer also computes a routing confidence metric:
+$$\text{confidence} = 2.0 \cdot |S_c - 0.5| \in [0.0, 1.0]$$
+The router checks score thresholds derived from the master parameter $\Theta \in [0.0, 1.0]$:
+*   $\theta_{low} = 0.5 \cdot \Theta$
+*   $\theta_{high} = 0.5 + 0.5 \cdot \Theta$
+Routing mapping and agent pruning follow:
+*   **Low Complexity ($S_c < \theta_{low}$)**: Routed to the Small tier (`llama3.2:1b` on Raspberry Pi 5). Bypasses the Planner and Critic agents (only the Executor or Retriever runs).
+*   **Medium Complexity ($\theta_{low} \leq S_c < \theta_{high}$)**: Routed to the Medium tier (`llama3.2:3b` on Raspberry Pi 5). Bypasses the Critic agent (Planner, Retriever, and Executor cooperate).
+*   **High Complexity ($S_c \geq \theta_{high}$)**: Routed to the Large tier (`llama3.1:8b` on Workstation via gRPC). Runs the full agent loop (Planner, Retriever, Executor, Critic) with no pruning.
+Every decision generates a `routing_margin` metric indicating proximity to boundaries, outputs a list of `decision_reasons`, and is written to a structured JSONL log file with hashed prompts for privacy.
 
 ## 6. Three-Tier KV-Cache Manager
 The cache manager is built on `llama-cpp-python` / `llama.cpp` serialization primitives (`save_state()` / `load_state()`) which serialize running contexts as binary byte arrays, completely bypassing prefill times.
