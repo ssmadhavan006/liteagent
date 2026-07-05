@@ -1,12 +1,13 @@
 version: 1
 weights:
-  length_chars: 1.0
-  code_syntax_count: 0.75
-  math_operator_density: 0.5
-  math_keyword_count: 0.5
-  logical_count: 0.4
-  question_count: 0.2
-  entity_density: 0.2
-bias: -1.2
+  length_chars: 6.0
+  code_syntax_count: 4.5
+  math_operator_density: 3.0
+  math_keyword_count: 3.0
+  logical_count: 2.4
+  question_count: 1.2
+  entity_density: 1.2
+bias: -4.0
 routing:
-  theta: 0.70
+  theta_low: 0.35
+  theta_high: 0.75

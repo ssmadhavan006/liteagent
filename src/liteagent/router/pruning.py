@@ -1,11 +1,8 @@
-def map_tier_and_pruning(score: float, theta: float, benchmark: str = None) -> tuple[str, str, list[str], list[str]]:
+def map_tier_and_pruning(score: float, theta_low: float, theta_high: float, benchmark: str = None) -> tuple[str, str, list[str], list[str]]:
     """
-    Maps complexity score Sc and routing parameter Theta to model tiers and pruned agents.
+    Maps complexity score Sc and thresholds to model tiers and pruned agents.
     Returns (model_tier, execution_location, active_agents, pruned_agents)
     """
-    theta_low = 0.5 * theta
-    theta_high = 0.5 + (0.5 * theta)
-    
     all_agents = ["Planner", "Retriever", "Executor", "Critic"]
     
     if score < theta_low:

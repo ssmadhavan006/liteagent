@@ -15,7 +15,8 @@ class ComplexityScorer:
             "entity_density": 0.05
         }
         self.bias = -0.25
-        self.theta = 0.50
+        self.theta_low = 0.25
+        self.theta_high = 0.75
         
         if config_path:
             self.load_config(config_path)
@@ -35,7 +36,8 @@ class ComplexityScorer:
         self.bias = config.get("bias", self.bias)
         
         routing_section = config.get("routing", {})
-        self.theta = routing_section.get("theta", self.theta)
+        self.theta_low = routing_section.get("theta_low", self.theta_low)
+        self.theta_high = routing_section.get("theta_high", self.theta_high)
 
     def score_task(self, normalized_features: dict[str, float]) -> tuple[float, float]:
         """

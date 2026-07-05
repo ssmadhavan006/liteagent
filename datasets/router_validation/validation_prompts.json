@@ -398,5 +398,245 @@
     "expected_tier": "Low",
     "labeler": "Manual",
     "reason": "Direct geographical factual query"
+  },
+  {
+    "id": 51,
+    "benchmark": "GSM8K",
+    "prompt": "What is 100 divided by 4?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Single-step basic division arithmetic"
+  },
+  {
+    "id": 52,
+    "benchmark": "HotpotQA",
+    "prompt": "Who is the President of the United States?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Factual geopolitical lookup"
+  },
+  {
+    "id": 53,
+    "benchmark": "HumanEval",
+    "prompt": "def identity(x):\n    return x",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Trivial identity function definition"
+  },
+  {
+    "id": 54,
+    "benchmark": "GSM8K",
+    "prompt": "Add 12 to 18.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Single-step basic addition arithmetic"
+  },
+  {
+    "id": 55,
+    "benchmark": "HotpotQA",
+    "prompt": "In which state is the Grand Canyon located?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Factual geographical lookup"
+  },
+  {
+    "id": 56,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function that prints the version number.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Simple print statement code template"
+  },
+  {
+    "id": 57,
+    "benchmark": "GSM8K",
+    "prompt": "Subtract 50 from 120.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Single-step basic subtraction arithmetic"
+  },
+  {
+    "id": 58,
+    "benchmark": "HotpotQA",
+    "prompt": "What is the largest ocean on Earth?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Factual physical geography query"
+  },
+  {
+    "id": 59,
+    "benchmark": "HumanEval",
+    "prompt": "def double_value(x):\n    return x * 2",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Trivial multiplication function template"
+  },
+  {
+    "id": 60,
+    "benchmark": "HotpotQA",
+    "prompt": "What country borders the United States to the north?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Factual geographical lookup query"
+  },
+  {
+    "id": 61,
+    "benchmark": "GSM8K",
+    "prompt": "A box of cereal costs $4. A carton of milk costs $3. If a shopper buys 2 boxes of cereal and 3 cartons of milk, and pays with a $20 bill, how much change does she receive?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires multiplication steps and subtraction from total payment"
+  },
+  {
+    "id": 62,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function to compute the greatest common divisor (GCD) of two numbers using Euclidean algorithm.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires simple looping/recursive algorithmic implementation"
+  },
+  {
+    "id": 63,
+    "benchmark": "HotpotQA",
+    "prompt": "Which director has won more Oscars: Steven Spielberg or Martin Scorsese?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires retrieving factual Oscar counts for both directors and comparing"
+  },
+  {
+    "id": 64,
+    "benchmark": "GSM8K",
+    "prompt": "If a student gets 18 out of 20 correct on a test, what is her score expressed as a percentage?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires division ratio and percentage multiplication steps"
+  },
+  {
+    "id": 65,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function `has_duplicates(lst)` that returns True if a list has duplicates, else False.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires iterating or set conversion logic on a list"
+  },
+  {
+    "id": 66,
+    "benchmark": "HotpotQA",
+    "prompt": "Do the movies 'Jurassic Park' and 'Schindler's List' have the same director?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires retrieving directors of two movies and asserting equality"
+  },
+  {
+    "id": 67,
+    "benchmark": "GSM8K",
+    "prompt": "A car travels at 50 mph for 1.5 hours and then 60 mph for 2 hours. What is the total distance traveled?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires segment multiplication and distance sum steps"
+  },
+  {
+    "id": 68,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function `is_anagram(s1, s2)` that returns True if s1 and s2 are anagrams, else False.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires sorting or frequency counting logic on two strings"
+  },
+  {
+    "id": 69,
+    "benchmark": "HotpotQA",
+    "prompt": "Compare the capitals of Canada and Australia. Which one has a larger population?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires retrieving population of Ottawa and Canberra and comparing"
+  },
+  {
+    "id": 70,
+    "benchmark": "GSM8K",
+    "prompt": "If 3 pencils cost $1.50, how much do 10 pencils cost?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires computing unit price and multiplying by target count"
+  },
+  {
+    "id": 71,
+    "benchmark": "GSM8K",
+    "prompt": "A water tank has two inlet pipes and one outlet pipe. Pipe A fills the tank in 4 hours, Pipe B fills it in 6 hours, and Pipe C drains it in 3 hours. If the tank is initially empty and all three pipes are opened simultaneously, but a leak develops after 1 hour that drains the tank at a rate of 10% of the total capacity per hour, how long will it take to fill the tank up to 90% capacity?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Extremely complex rate summation with temporal leak changes and fractional targets"
+  },
+  {
+    "id": 72,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python parser for a subset of JSON that parses simple JSON strings (containing objects, lists, numbers, and strings) into python dicts and lists. Do not use the standard json module.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires complex tokenization, parsing trees, and syntactical analysis loops"
+  },
+  {
+    "id": 73,
+    "benchmark": "HotpotQA",
+    "prompt": "Analyze the cultural and political impact of the treaty signed in the city where the league of nations was headquartered. Contrast its outcomes with the Treaty of Versailles signed in 1919.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires multi-hop fact lookup, treaty outcomes comparisons, and deep prose synthesis"
+  },
+  {
+    "id": 74,
+    "benchmark": "HumanEval",
+    "prompt": "Implement a trie (prefix tree) in Python supporting insert, search, and startsWith operations. Then, write a method to find all words in the trie that start with a given prefix, ordered alphabetically.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires complex nested tree construction and recursive search algorithms"
+  },
+  {
+    "id": 75,
+    "benchmark": "GSM8K",
+    "prompt": "A company pays its employees a base salary of $15 per hour for the first 40 hours worked in a week, and time-and-a-half ($22.50 per hour) for any overtime hours. If an employee works 48 hours in a week and has 10% of their gross earnings deducted for taxes, what is their net weekly take-home pay?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires piecewise hourly income rates, gross earnings summation, tax subtraction, and net pay computation"
+  },
+  {
+    "id": 76,
+    "benchmark": "HotpotQA",
+    "prompt": "Find the name of the ship that sank in 1912 and compare its length and tonnage with the largest passenger ship currently active in 2026. Detail the historical context of both vessels.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires resolving factual ship names, historical details, active modern ship metrics, and comparing dimensions"
+  },
+  {
+    "id": 77,
+    "benchmark": "HumanEval",
+    "prompt": "Write a Python program that implements a custom thread pool from scratch. The pool should support submitting tasks, worker threads consuming tasks from a queue, handling thread errors gracefully, and a shutdown method to wait for tasks to finish.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires multi-threaded queue concurrency, thread synchronization, error handlers, and shutdown hooks"
+  },
+  {
+    "id": 78,
+    "benchmark": "GSM8K",
+    "prompt": "A farm has chickens and rabbits. The total number of heads is 35, and the total number of legs is 94. If 1/5 of the chickens are sold and 1/3 of the rabbits are sold, how many animals are left on the farm?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires simultaneous linear equations solving followed by fractional subtractions and totals sum"
+  },
+  {
+    "id": 79,
+    "benchmark": "HotpotQA",
+    "prompt": "Determine if the lead actor of the movie that won the Academy Award for Best Picture in 2024 has ever starred in a film directed by Christopher Nolan. Detail their collaborations and roles.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires multi-hop lookups: Best Picture 2024 (Oppenheimer), lead actor (Cillian Murphy), Nolan movies, and details"
+  },
+  {
+    "id": 80,
+    "benchmark": "HumanEval",
+    "prompt": "Create a simple command-line interface (CLI) database in Python that supports key-value storage, transactions (BEGIN, COMMIT, ROLLBACK), nested transactions, and saving database states to disk using binary serialization.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires complex transaction stack logic, command loops, and binary file I/O serialization"
   }
 ]

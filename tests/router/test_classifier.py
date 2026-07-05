@@ -7,7 +7,8 @@ def test_scorer_default_initialization():
     assert scorer.version == 1
     assert scorer.bias == -0.25
     assert scorer.weights["length_chars"] == 0.35
-    assert scorer.theta == 0.50
+    assert scorer.theta_low == 0.25
+    assert scorer.theta_high == 0.75
 
 def test_scorer_load_config():
     # Write a temporary config
@@ -20,7 +21,8 @@ weights:
   code_syntax_count: 0.20
 bias: -0.10
 routing:
-  theta: 0.65
+  theta_low: 0.30
+  theta_high: 0.80
 """)
     
     scorer = ComplexityScorer(config_path)
@@ -28,7 +30,8 @@ routing:
     assert scorer.bias == -0.10
     assert scorer.weights["length_chars"] == 0.10
     assert scorer.weights["code_syntax_count"] == 0.20
-    assert scorer.theta == 0.65
+    assert scorer.theta_low == 0.30
+    assert scorer.theta_high == 0.80
     
     # Cleanup
     if os.path.exists(config_path):

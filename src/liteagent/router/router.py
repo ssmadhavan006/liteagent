@@ -26,10 +26,7 @@ def get_decision_reasons(normalized_features: dict[str, float]) -> list[str]:
         reasons.append("named_entities")
     return reasons
 
-def compute_routing_margin(score: float, theta: float, tier: str) -> float:
-    theta_low = 0.5 * theta
-    theta_high = 0.5 + (0.5 * theta)
-    
+def compute_routing_margin(score: float, theta_low: float, theta_high: float, tier: str) -> float:
     if tier == "Small":
         return float(theta_low - score)
     elif tier == "Medium":
@@ -71,10 +68,10 @@ def route_task(task: dict, config_path: str = None, log_dir: str = "experiments"
     score, confidence = scorer.score_task(norm_feats)
     
     # 3. Agent pruning & location mapping
-    tier, location, active, pruned = map_tier_and_pruning(score, scorer.theta, benchmark)
+    tier, location, active, pruned = map_tier_and_pruning(score, scorer.theta_low, scorer.theta_high, benchmark)
     
     # 4. Routing metadata
-    margin = compute_routing_margin(score, scorer.theta, tier)
+    margin = compute_routing_margin(score, scorer.theta_low, scorer.theta_high, tier)
     reasons = get_decision_reasons(norm_feats)
     prompt_hash = compute_prompt_hash(prompt)
     
@@ -84,7 +81,8 @@ def route_task(task: dict, config_path: str = None, log_dir: str = "experiments"
     log_entry = {
         "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
         "config_version": scorer.version,
-        "theta": scorer.theta,
+        "theta_low": scorer.theta_low,
+        "theta_high": scorer.theta_high,
         "score": round(score, 4),
         "confidence": round(confidence, 4),
         "routing_margin": round(margin, 4),
@@ -108,7 +106,8 @@ def route_task(task: dict, config_path: str = None, log_dir: str = "experiments"
         "pruned_agents": pruned,
         "metadata": {
             "config_version": scorer.version,
-            "theta": scorer.theta,
+            "theta_low": scorer.theta_low,
+            "theta_high": scorer.theta_high,
             "score": score,
             "confidence": confidence,
             "routing_margin": margin,

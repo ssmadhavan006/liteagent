@@ -1,6 +1,10 @@
 # LiteAgent Router Sanity Validation Dataset
 
-This directory contains a manually curated set of 50 validation prompts used to verify that the LiteAgent Complexity Router behaves deterministically and correctly maps tasks according to their complexity.
+This directory contains a manually curated set of 80 validation prompts used to verify that the LiteAgent Complexity Router behaves deterministically and correctly maps tasks according to their complexity.
+
+To prevent evaluation contamination during parameter optimization, the dataset is partitioned into two disjoint subsets:
+*   **Calibration/Train Set (IDs 1–50)**: Used by our calibration scripts to perform a grid sweep and find optimal scorer weights and bias.
+*   **Held-Out Test Set (IDs 51–80)**: Used strictly as a blind, uncontaminated set to evaluate and report final routing accuracy.
 
 > [!NOTE]
 > This dataset is a sanity check validation set for verifying router thresholds and feature normalization bounds. It is not presented as a statistically rigorous evaluation (which is handled in Phase 8).
