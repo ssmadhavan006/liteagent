@@ -54,7 +54,7 @@ class WorkstationClient:
         system_prompt: str,
         temperature: float = 0.0,
         max_tokens: int = 100,
-        timeout: float = 90.0,
+        timeout: float = 180.0,
         cache_disabled: bool = False
     ) -> dict:
         """
