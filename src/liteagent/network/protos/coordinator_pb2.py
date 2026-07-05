@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n*liteagent/network/protos/coordinator.proto\x12\tliteagent\"\'\n\x0bPingRequest\x12\x18\n\x10protocol_version\x18\x01 \x01(\x05\"\x89\x01\n\x0cPingResponse\x12\x18\n\x10protocol_version\x18\x01 \x01(\x05\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x12\n\ncompatible\x18\x03 \x01(\x08\x12\x19\n\x11llama_cpp_version\x18\x04 \x01(\t\x12\x19\n\x11liteagent_version\x18\x05 \x01(\t\"\xdc\x01\n\x0bTaskRequest\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x12\n\nagent_role\x18\x03 \x01(\t\x12\x0e\n\x06prompt\x18\x04 \x01(\t\x12\x15\n\rsystem_prompt\x18\x05 \x01(\t\x12\x13\n\x0btemperature\x18\x06 \x01(\x02\x12\x12\n\nmax_tokens\x18\x07 \x01(\x05\x12\x18\n\x10protocol_version\x18\x08 \x01(\x05\x12\x12\n\nrequest_id\x18\t \x01(\t\x12\x16\n\x0e\x63lient_send_ts\x18\n \x01(\x01\"\xea\x02\n\x0cTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12\x18\n\x10tokens_generated\x18\x03 \x01(\x05\x12\x16\n\x0eprefill_tokens\x18\x04 \x01(\x05\x12\x1a\n\x12prefill_latency_ms\x18\x05 \x01(\x01\x12\x1d\n\x15generation_latency_ms\x18\x06 \x01(\x01\x12\x16\n\x0e\x63\x61\x63he_hit_tier\x18\x07 \x01(\t\x12\x18\n\x10protocol_version\x18\x08 \x01(\x05\x12\x12\n\nrequest_id\x18\t \x01(\t\x12\x19\n\x11server_receive_ts\x18\n \x01(\x01\x12\x1f\n\x17server_start_compute_ts\x18\x0b \x01(\x01\x12\x1d\n\x15server_end_compute_ts\x18\x0c \x01(\x01\x12$\n\x1cserver_serialize_duration_ms\x18\r \x01(\x01\x32\x92\x01\n\x16WorkstationCoordinator\x12\x37\n\x04Ping\x12\x16.liteagent.PingRequest\x1a\x17.liteagent.PingResponse\x12?\n\x0c\x44ispatchTask\x12\x16.liteagent.TaskRequest\x1a\x17.liteagent.TaskResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n*liteagent/network/protos/coordinator.proto\x12\tliteagent\"\'\n\x0bPingRequest\x12\x18\n\x10protocol_version\x18\x01 \x01(\x05\"\x89\x01\n\x0cPingResponse\x12\x18\n\x10protocol_version\x18\x01 \x01(\x05\x12\x15\n\rmodel_version\x18\x02 \x01(\t\x12\x12\n\ncompatible\x18\x03 \x01(\x08\x12\x19\n\x11llama_cpp_version\x18\x04 \x01(\t\x12\x19\n\x11liteagent_version\x18\x05 \x01(\t\"\xf4\x01\n\x0bTaskRequest\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x12\n\nagent_role\x18\x03 \x01(\t\x12\x0e\n\x06prompt\x18\x04 \x01(\t\x12\x15\n\rsystem_prompt\x18\x05 \x01(\t\x12\x13\n\x0btemperature\x18\x06 \x01(\x02\x12\x12\n\nmax_tokens\x18\x07 \x01(\x05\x12\x18\n\x10protocol_version\x18\x08 \x01(\x05\x12\x12\n\nrequest_id\x18\t \x01(\t\x12\x16\n\x0e\x63lient_send_ts\x18\n \x01(\x01\x12\x16\n\x0e\x63\x61\x63he_disabled\x18\x0b \x01(\x08\"\xea\x02\n\x0cTaskResponse\x12\x0f\n\x07task_id\x18\x01 \x01(\t\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12\x18\n\x10tokens_generated\x18\x03 \x01(\x05\x12\x16\n\x0eprefill_tokens\x18\x04 \x01(\x05\x12\x1a\n\x12prefill_latency_ms\x18\x05 \x01(\x01\x12\x1d\n\x15generation_latency_ms\x18\x06 \x01(\x01\x12\x16\n\x0e\x63\x61\x63he_hit_tier\x18\x07 \x01(\t\x12\x18\n\x10protocol_version\x18\x08 \x01(\x05\x12\x12\n\nrequest_id\x18\t \x01(\t\x12\x19\n\x11server_receive_ts\x18\n \x01(\x01\x12\x1f\n\x17server_start_compute_ts\x18\x0b \x01(\x01\x12\x1d\n\x15server_end_compute_ts\x18\x0c \x01(\x01\x12$\n\x1cserver_serialize_duration_ms\x18\r \x01(\x01\x32\x92\x01\n\x16WorkstationCoordinator\x12\x37\n\x04Ping\x12\x16.liteagent.PingRequest\x1a\x17.liteagent.PingResponse\x12?\n\x0c\x44ispatchTask\x12\x16.liteagent.TaskRequest\x1a\x17.liteagent.TaskResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,9 +36,9 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PINGRESPONSE']._serialized_start=99
   _globals['_PINGRESPONSE']._serialized_end=236
   _globals['_TASKREQUEST']._serialized_start=239
-  _globals['_TASKREQUEST']._serialized_end=459
-  _globals['_TASKRESPONSE']._serialized_start=462
-  _globals['_TASKRESPONSE']._serialized_end=824
-  _globals['_WORKSTATIONCOORDINATOR']._serialized_start=827
-  _globals['_WORKSTATIONCOORDINATOR']._serialized_end=973
+  _globals['_TASKREQUEST']._serialized_end=483
+  _globals['_TASKRESPONSE']._serialized_start=486
+  _globals['_TASKRESPONSE']._serialized_end=848
+  _globals['_WORKSTATIONCOORDINATOR']._serialized_start=851
+  _globals['_WORKSTATIONCOORDINATOR']._serialized_end=997
 # @@protoc_insertion_point(module_scope)
