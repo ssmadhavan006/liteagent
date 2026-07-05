@@ -20,7 +20,7 @@ We executed LiteAgent and all five baseline comparators on a workstation loopbac
 | **Static Full-Pipeline** | `"static_full"` | Routed/Executed: **Large** | Routed/Executed: **Large** | Routed/Executed: **Large** | disabled (full prefill) |
 | **LiteAgent (Routing Only)** | `"routing_only"` | Routed/Executed: **Small** | Routed/Executed: **Medium** | Routed/Executed: **Medium** | disabled (full prefill) |
 | **LiteAgent (Cache Only)** | `"cache_only"` | Routed/Executed: **Large** | Routed/Executed: **Large** | Routed/Executed: **Large** | persistent 3-tier active |
-| **RouteLLM-style Heuristic** | `"routellm_heuristic"` | Routed/Executed: **Small** | Routed/Executed: **Medium** | Routed/Executed: **Medium** | disabled (full prefill) |
+| **RouteLLM-style Heuristic** | `"routellm_heuristic"` | Routed/Executed: **Small** | Routed/Executed: **Medium** | Routed/Executed: **Large** | disabled (full prefill) |
 | **Flat In-Memory Cache (Slots=1)** | `"flat_cache"` | Routed/Executed: **Small** | **EXPECTED_LIMIT_REACHED** | (Not Executed) | prefix-only (no swap) |
 
 ---

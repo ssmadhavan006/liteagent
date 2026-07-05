@@ -1,11 +1,18 @@
 import time
 import uuid
 import hashlib
+import re
 from llama_cpp import Llama
 
 from liteagent.network.dispatch import TaskDispatcher
-from liteagent.router.features import extract_raw_features, normalize_features
 from liteagent.utils.model_resolver import resolve_model_path
+
+# Independent keyword dictionary representing complex task indicators
+COMPLEX_KEYWORDS = {
+    "class", "def", "function", "import", "implement", "tree", "binary", "insert", 
+    "delete", "search", "math", "logic", "code", "recursive", "algorithm", "compare",
+    "prove", "equation", "solve"
+}
 
 class RouteLLMHeuristicDispatcher(TaskDispatcher):
     """
@@ -18,7 +25,7 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
     the cheapest model predicted to satisfy a utility threshold), allowing the evaluation of the 
     system's architectural behavior in isolation.
     """
-    def __init__(self, workstation_client, edge_cache_manager, log_dir="experiments", threshold=0.5):
+    def __init__(self, workstation_client, edge_cache_manager, log_dir="experiments", threshold=0.12):
         super().__init__(
             router_config_path="config/router_config.yaml",
             edge_cache_manager=edge_cache_manager,
@@ -40,20 +47,23 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
     ) -> dict:
         request_id = str(uuid.uuid4())
         
-        # 1. RouteLLM-style heuristic routing
+        # 1. RouteLLM-style heuristic routing (Independent word-overlap density)
         prompt = task.get("prompt", "")
-        raw = extract_raw_features(prompt)
-        norm = normalize_features(raw)
+        # Basic word tokenization (lowercase, strip punctuation)
+        words = [w.strip(".,!?;:()[]{}'\"").lower() for w in prompt.split()]
+        words = [w for w in words if w]
         
-        # Simple linear utility calculation
-        utility = 0.4 * norm["length_chars"] + 0.3 * norm["code_syntax_count"] + 0.3 * norm["math_operator_density"]
-        utility = min(max(utility, 0.0), 1.0)
+        if not words:
+            utility = 0.0
+        else:
+            overlap = sum(1 for w in words if w in COMPLEX_KEYWORDS)
+            utility = overlap / len(words)
         
         if utility >= self.threshold:
             tier = "Large"
             location = "remote"
             active_agents = ["Planner", "Retriever", "Executor", "Critic"]
-        elif utility >= self.threshold * 0.4:
+        elif utility >= self.threshold * 0.33: # Threshold 0.04
             tier = "Medium"
             location = "local"
             active_agents = ["Planner", "Executor"]
