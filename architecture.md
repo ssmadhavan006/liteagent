@@ -138,6 +138,12 @@ graph TD
 | KV-Cache Local-Only Boundary | Serialized cache states are kept strictly local to each device and never cross the network to avoid severe bandwidth bottlenecks. | 2 | 2026-07-04 |
 | Cache Eviction: Priority-Weighted LRU (PW-LRU) | Evicts states from RAM to SSD based on both last access time and static agent role priorities (`Critic` = 1.0, `Executor` = 0.8, `Planner` = 0.5, `Retriever` = 0.3) to protect critical active agent states. | 2 | 2026-07-04 |
 | Weighted Linear Complexity Scorer | Swapped from simple heuristic check rules to a Weighted Linear Complexity Function with sigmoid scaling, providing a continuous score (Sc) and routing confidence metric. | 3 | 2026-07-05 |
+| Clock-Drift-Independent Latency Profiling | Subtracts local durations instead of absolute server-client timestamps to isolate network transport overhead from clock drift. | 5 | 2026-07-05 |
+| Policy-Driven Fallback Dispatch | Degradation policies (medium_local, fail, retry_then_medium) configured to maintain edge resilience under network failures. | 5 | 2026-07-05 |
+| Ablation Configuration Overrides | Implemented `routing_disabled` and `cache_disabled` as dispatcher toggles to verify component contributions on identical code paths. | 6 | 2026-07-05 |
+| Log Parity & Feature Flags | Logs include a `"baseline"` identifier and execution `"feature_flags"` to verify and align all baseline events automatically. | 6 | 2026-07-05 |
+| Expected Limit Cache Handling | Classified prefix cache exhaustion under `EXPECTED_LIMIT_REACHED` to distinguish normal capacity bounds from runtime failures. | 6 | 2026-07-05 |
+
 
 ### Why not Ollama?
 Ollama provides convenient high-level inference APIs but does not expose tensor-level model state serialization required for persistent KV-cache research. LiteAgent therefore employs `llama-cpp-python` for model execution while optionally reusing Ollama-managed GGUF assets through the blob resolver to avoid redundant downloads.
