@@ -59,7 +59,7 @@ class WorkstationCoordinatorServicer(coordinator_pb2_grpc.WorkstationCoordinator
             model_path = resolve_model_path(model_tag)
             with self.locks_lock:
                 if model_tag not in self.models:
-                    self.models[model_tag] = Llama(model_path=model_path, n_ctx=ctx_size, verbose=False, seed=42)
+                    self.models[model_tag] = Llama(model_path=model_path, n_ctx=ctx_size, logits_all=True, verbose=False, seed=42)
                 if model_tag not in self.model_locks:
                     self.model_locks[model_tag] = threading.Lock()
                 llama = self.models[model_tag]

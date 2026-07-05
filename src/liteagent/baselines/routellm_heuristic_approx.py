@@ -148,7 +148,7 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
         # Load local model
         with self.locks_lock:
             if model_tag not in self.local_models:
-                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, verbose=False, seed=42)
+                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, logits_all=True, verbose=False, seed=42)
             if model_tag not in self.model_locks:
                 self.model_locks[model_tag] = threading.Lock()
             llama = self.local_models[model_tag]
