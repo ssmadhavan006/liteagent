@@ -177,7 +177,7 @@ class TaskDispatcher:
         
         # Load local model
         if model_tag not in self.local_models:
-            self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=512, verbose=False, seed=42)
+            self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=2048, verbose=False, seed=42)
         llama = self.local_models[model_tag]
         
         # Load local cache state
@@ -188,7 +188,7 @@ class TaskDispatcher:
                 session_key=session_id,
                 llama_instance=llama,
                 model_tag=model_tag,
-                ctx_size=512,
+                ctx_size=2048,
                 prompt_hash=prompt_hash
             )
         
@@ -237,7 +237,7 @@ class TaskDispatcher:
                 agent_role=role,
                 llama_instance=llama,
                 model_tag=model_tag,
-                ctx_size=512,
+                ctx_size=2048,
                 prompt_hash=prompt_hash
             )
             self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})

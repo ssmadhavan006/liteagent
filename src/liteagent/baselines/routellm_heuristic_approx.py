@@ -145,7 +145,7 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
         model_path = resolve_model_path(model_tag)
         
         if model_tag not in self.local_models:
-            self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=512, verbose=False, seed=42)
+            self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=2048, verbose=False, seed=42)
         llama = self.local_models[model_tag]
         
         # Load local cache state (bypassed since cache_disabled is True)
