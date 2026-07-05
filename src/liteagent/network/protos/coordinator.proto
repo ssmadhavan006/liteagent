@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package liteagent;
+
+service WorkstationCoordinator {
+  // Verifies connection and checks version compatibility
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  // Dispatches a high-complexity sub-task from Edge to Workstation
+  rpc DispatchTask(TaskRequest) returns (TaskResponse);
+}
+
+message PingRequest {
+  int32 protocol_version = 1;
+}
+
+message PingResponse {
+  int32 protocol_version = 1;
+  string model_version = 2;
+  bool compatible = 3;
+  string llama_cpp_version = 4;
+  string liteagent_version = 5;
+}
+
+message TaskRequest {
+  string task_id = 1;
+  string session_id = 2;       // Maps to local cache key on Workstation
+  string agent_role = 3;       // Planner, Retriever, Executor, Critic
+  string prompt = 4;           // Prompt content
+  string system_prompt = 5;    // System instructions
+  float temperature = 6;
+  int32 max_tokens = 7;
+  int32 protocol_version = 8;
+  string request_id = 9;       // Unique correlation ID
+  double client_send_ts = 10;  // Unix timestamp of client send
+}
+
+message TaskResponse {
+  string task_id = 1;
+  string response_text = 2;
+  int32 tokens_generated = 3;
+  int32 prefill_tokens = 4;
+  
+  // Execution Latency Metrics
+  double prefill_latency_ms = 5;
+  double generation_latency_ms = 6;
+  
+  // Cache Tracking Metrics
+  string cache_hit_tier = 7;   // "HOT", "STANDBY", "COLD", "MISS"
+
+  int32 protocol_version = 8;
+  string request_id = 9;
+  
+  // Server-side timestamps for clock-independent latency breakdown
+  double server_receive_ts = 10;
+  double server_start_compute_ts = 11;
+  double server_end_compute_ts = 12;
+  double server_serialize_duration_ms = 13;
+}
