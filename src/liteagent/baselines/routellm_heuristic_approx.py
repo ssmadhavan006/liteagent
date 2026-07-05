@@ -3,6 +3,7 @@ import uuid
 import hashlib
 import re
 import threading
+import numpy as np
 from llama_cpp import Llama
 
 from liteagent.network.dispatch import TaskDispatcher
@@ -148,7 +149,7 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
         # Load local model
         with self.locks_lock:
             if model_tag not in self.local_models:
-                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, logits_all=True, verbose=False, seed=42)
+                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, verbose=False, seed=42)
             if model_tag not in self.model_locks:
                 self.model_locks[model_tag] = threading.Lock()
             llama = self.local_models[model_tag]
@@ -175,8 +176,13 @@ class RouteLLMHeuristicDispatcher(TaskDispatcher):
             gen_start = time.time()
             response_tokens = []
             for _ in range(max_tokens):
-                logits = llama.eval_logits[-1]
-                next_token = logits.index(max(logits))
+                if hasattr(llama, "_ctx") and llama._ctx is not None:
+                    logits_ptr = llama._ctx.get_logits()
+                    logits = np.ctypeslib.as_array(logits_ptr, shape=(llama._n_vocab,))
+                    next_token = int(np.argmax(logits))
+                else:
+                    logits = llama.eval_logits[-1]
+                    next_token = logits.index(max(logits))
                 
                 if next_token == llama.token_eos():
                     break
