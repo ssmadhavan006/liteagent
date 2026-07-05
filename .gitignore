@@ -28,3 +28,6 @@ weights/
 # IDEs
 .vscode/
 .idea/
+
+# Run log directories
+experiments/

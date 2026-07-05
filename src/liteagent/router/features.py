@@ -1,3 +1,4 @@
+import math
 import re
 
 def get_entity_density(prompt: str) -> float:
@@ -66,8 +67,10 @@ def normalize_features(raw_features: dict[str, float]) -> dict[str, float]:
     """
     Normalizes extracted feature values to the range [0.0, 1.0].
     """
+    length_val = raw_features["length_chars"]
+    log_len = min(math.log(length_val) / math.log(4000.0), 1.0) if length_val > 1.0 else 0.0
     return {
-        "length_chars": min(raw_features["length_chars"] / 4000.0, 1.0),
+        "length_chars": log_len,
         "code_syntax_count": min(raw_features["code_syntax_count"] / 10.0, 1.0),
         "math_operator_density": min(raw_features["math_operator_density"], 1.0),
         "math_keyword_count": min(raw_features["math_keyword_count"] / 5.0, 1.0),
