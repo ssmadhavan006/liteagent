@@ -1,9 +1,11 @@
 # LiteAgent — Progress Log
 
 ## Current Status
-- **Active Phase:** Phase 5 — Edge–Workstation Integration
+- **Active Phase:** Phase 6 — Baselines
 - **Last updated:** 2026-07-05
-- **Next immediate task:** Define gRPC client/server coordinator and message protocols.
+- **Next immediate task:** Define baseline systems and RouteLLM reference implementations.
+- **Blockers & Dependencies:**
+  - `BLOCKED`: Real cross-device LAN testing pending Pi hardware availability. Must be resolved before Phase 8 (Full Evaluation Runs) begins. Loopback baseline stands in for development/testing only.
 
 ## Phase Checklist
 - [x] Phase 0 — Foundations & Scoping
@@ -11,13 +13,42 @@
 - [x] Phase 2 — System Design
 - [x] Phase 3 — Complexity Router
 - [x] Phase 4 — Three-Tier KV-Cache Manager
-- [ ] Phase 5 — Edge–Workstation Integration
+- [x] Phase 5 — Edge–Workstation Integration
 - [ ] Phase 6 — Baselines
 - [ ] Phase 7 — Benchmark & Metric Setup
 - [ ] Phase 8 — Full Evaluation Runs
 - [ ] Phase 9 — Analysis & Ablations
 - [ ] Phase 10 — Paper Writing
 - [ ] Phase 11 — Review & Submission
+
+### 2026-07-05T22:35:00+05:30 — Phase 5 Completion
+- **What was done:** Compiled gRPC coordinator protobuf schema (`coordinator.proto`) for Workstation models. Coded workstation coordinator servicer to cache model instances dynamically and execute tasks using the local `KVCacheManager`. Implemented edge coordinator client with model warmup request support and client-side serialization metric tracking. Implemented clock-drift-independent transport latency calculation. Coded policy-driven fallback dispatcher (options: `medium_local`, `fail`, `retry_then_medium`). Documented local loopback baseline measurements and edge thread starvation mitigations.
+- **Deferred items:**
+  - `DEFERRED`: Real cross-device LAN testing using physical Raspberry Pi 5. Must repeat Phase 5 Task 4 and Task 6 end-to-end on real hardware before starting Phase 8.
+- **Files touched:**
+  - [src/liteagent/network/protos/coordinator.proto](file:///d:/Coding/liteagent/src/liteagent/network/protos/coordinator.proto)
+  - [src/liteagent/network/compile_protos.py](file:///d:/Coding/liteagent/src/liteagent/network/compile_protos.py)
+  - [src/liteagent/network/server.py](file:///d:/Coding/liteagent/src/liteagent/network/server.py)
+  - [src/liteagent/network/client.py](file:///d:/Coding/liteagent/src/liteagent/network/client.py)
+  - [src/liteagent/network/dispatch.py](file:///d:/Coding/liteagent/src/liteagent/network/dispatch.py)
+  - [src/liteagent/network/metrics.py](file:///d:/Coding/liteagent/src/liteagent/network/metrics.py)
+  - [src/liteagent/network/__init__.py](file:///d:/Coding/liteagent/src/liteagent/network/__init__.py)
+  - [tests/network/test_grpc_integration.py](file:///d:/Coding/liteagent/tests/network/test_grpc_integration.py)
+  - [config/router_config.yaml](file:///d:/Coding/liteagent/config/router_config.yaml)
+  - [architecture.md](file:///d:/Coding/liteagent/architecture.md)
+  - [progress.md](file:///d:/Coding/liteagent/progress.md)
+- **Commands run (if any):**
+  - `uv run python src/liteagent/network/compile_protos.py`
+  - `uv run python -m pytest tests/network/test_grpc_integration.py`
+  - `uv run python -m pytest tests/`
+  - `uv run python scratch/smoke_test.py`
+- **Decisions made:**
+  - Cast `task_id` parameters to strings explicitly to prevent serialization/setter type mismatches in compiled protobuf runtimes.
+  - Wrapped server servicer loops in full try-except blocks with stdout traceback flushing to guarantee visibility of runtime errors during remote calls.
+  - Relabeled all current 8B network benchmarks as same-machine loopback baselines.
+- **Verification:** Passed all 28 unit and integration tests. End-to-end smoke test successfully demonstrated local 1B/3B execution and remote 8B gRPC dispatch.
+- **Blocked on / waiting for user:** physical Raspberry Pi 5 availability for actual cross-device LAN measurements.
+- **Deferred to later phase:** cross-device LAN network evaluations (to Phase 8).
 
 ### 2026-07-05T12:30:00+05:30 — Phase 4 Completion
 - **What was done:** Implemented the Three-Tier KV-Cache Manager. Resolved model GGUF path mappings using the Ollama manifest resolver and Hugging Face fallback downloads. Separated serialization logic from storage operations, creating companion versioned JSON metadata files. Coded the PW-LRU eviction algorithm with static role priorities. Instrumented granular save/load latency tracking and process RAM usage monitoring. Verified H2 hypothesis losslessness under sequential and random multi-agent stress switching.
