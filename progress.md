@@ -364,3 +364,43 @@ All Phase 3 complexity router deliverables have been implemented and verified:
 2.  **Sanity Check Dataset**: Curated a 50-prompt validation set in [validation_prompts.json](file:///d:/Coding/liteagent/datasets/router_validation/validation_prompts.json) and documented labeling rules in [README.md](file:///d:/Coding/liteagent/datasets/router_validation/README.md).
 3.  **Core Modules**: Exposes `route_task` entrypoint via [__init__.py](file:///d:/Coding/liteagent/src/liteagent/router/__init__.py), executing feature extraction in [features.py](file:///d:/Coding/liteagent/src/liteagent/router/features.py), scoring in [classifier.py](file:///d:/Coding/liteagent/src/liteagent/router/classifier.py), pruning mappings in [pruning.py](file:///d:/Coding/liteagent/src/liteagent/router/pruning.py), and structured SHA256 prompt-hash logging in [router.py](file:///d:/Coding/liteagent/src/liteagent/router/router.py).
 4.  **Verification**: 11 unit/integration pytest cases pass cleanly, and the sanity validation script reports a calibrated routing accuracy of **70.00%** on the validation dataset.
+
+
+## Phase 4 Summary
+
+All Phase 4 KV-cache manager deliverables have been implemented and verified:
+1.  **Core Modules**: Exposes three-tier cache primitives in `src/liteagent/cache/`.
+2.  **Eviction Logic**: Implemented PW-LRU eviction based on agent role priorities in [eviction.py](file:///d:/Coding/liteagent/src/liteagent/cache/eviction.py).
+3.  **Serialization**: Implemented pickle state encapsulation in [serialization.py](file:///d:/Coding/liteagent/src/liteagent/cache/serialization.py).
+4.  **Verification**: Verified context saving/loading, eviction correctness under VRAM/RAM constraints, and lossless context restoration (Exact Match tokens) with 12 passing test cases.
+
+
+## Phase 5 Summary
+
+All Phase 5 edge-workstation coordination deliverables have been implemented and verified:
+1.  **gRPC Schema**: Defined protobuf task coordination contract in `src/liteagent/network/protos/coordinator.proto`.
+2.  **Server & Client**: Implemented Workstation Coordinator Server in [server.py](file:///d:/Coding/liteagent/src/liteagent/network/server.py) and Client stub wrapper in [client.py](file:///d:/Coding/liteagent/src/liteagent/network/client.py).
+3.  **Thread Starvation Mitigation**: Implemented inference thread constraints (capping local execution threads to $N-1$) to keep gRPC polling active.
+4.  **Network Failures**: Configured policy-driven network fallbacks (e.g. `medium_local`) to degrade execution gracefully.
+5.  **Verification**: Verified gRPC tasks, warmups, latency profiling residuals (loopback base ~4.9 ms), and fallback policies with unit and integration tests.
+
+
+## Phase 6 Summary
+
+All Phase 6 baseline comparator deliverables have been implemented and verified:
+1.  **Comparators**: Configured five baseline systems: Static Full-Pipeline, Routing-Only, Cache-Only, RouteLLM Heuristic, and Flat In-Memory Cache.
+2.  **RouteLLM Heuristic**: Implemented independent keyword density scoring in [routellm_heuristic_approx.py](file:///d:/Coding/liteagent/src/liteagent/baselines/routellm_heuristic_approx.py).
+3.  **Flat Cache Eviction Bounds**: Enforced `EXPECTED_LIMIT_REACHED` on slot capacity depletion in [vllm_prefix_cache_approx.py](file:///d:/Coding/liteagent/src/liteagent/baselines/vllm_prefix_cache_approx.py).
+4.  **Verification**: Verified functional parity across configurations and log event consistency.
+
+
+## Phase 7 Summary
+
+All Phase 7 evaluation harness, metric definitions, and sandbox security deliverables have been implemented and verified:
+1.  **Acquisition**: Acquired GSM8K, HotpotQA, and HumanEval datasets under MIT/CC licenses.
+2.  **Sampling**: Implemented stratified seed-based (seed 42) subset sampling.
+3.  **Security Sandboxing**: Implemented isolated Python subprocess sandboxing (`python -E -I -S`) with stripped environments, timeouts, memory limits (RLIMIT_AS), and secondary import/file-write blocks.
+4.  **Energy Profiling**: Implemented GPU energy measurement tracking via a background thread polling `nvidia-smi` at 100ms.
+5.  **Robustness Fixes**: Increased context window limit (`n_ctx = 4096`) to support long HotpotQA contexts, and extended client timeouts (`timeout = 90s`) to prevent concurrent execution clashes during CPU inference.
+6.  **Verification**: Verified correctness of all metrics and sandboxing, and completed a 30-task pilot evaluation sweep across LiteAgent and 2 baselines.
+
