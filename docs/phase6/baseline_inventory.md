@@ -32,7 +32,7 @@ This document defines the baseline comparison systems to be constructed in **Pha
 *   **Form**: A standalone router module `src/liteagent/baselines/routellm_heuristic_approx.py`.
 *   **Log Identifier**: `"routellm_heuristic"`
 *   **Feature Flags**: `{"routing": true, "cache": false, "grpc": true}`
-*   **Methodological Note**: This heuristic is fully independent of LiteAgent's hand-tuned density features. It calculates utility using a keyword-overlap density score against a list of 19 reasoning and technical indicators (e.g. `def`, `class`, `logic`, `solve`). It approximates RouteLLM's core decision principle (routing to the cheapest model predicted to satisfy a utility threshold), enabling evaluation of different architectural routing boundaries (e.g., routing complex coding tasks to the Large tier where LiteAgent might prune/route them to Medium).
+*   **Methodological Note**: This is a simple independent heuristic inspired by cost-aware routing literature, not a reimplementation of RouteLLM's trained router — included as a representative alternative-heuristic baseline, not a faithful reproduction. It is fully independent of LiteAgent's hand-tuned density features, calculating utility using a keyword-overlap density score against a list of 19 reasoning and technical indicators (e.g. `def`, `class`, `logic`, `solve`). It approximates RouteLLM's core decision principle (routing to the cheapest model predicted to satisfy a utility threshold), enabling evaluation of different architectural routing boundaries.
 *   **Threshold Settings**: Calibrated at `threshold = 0.12`. Prompts scoring below `0.04` route to Small; between `0.04` and `0.12` route to Medium; above `0.12` route to Large.
 
 ### 5. Flat In-Memory Cache (vLLM-inspired)
