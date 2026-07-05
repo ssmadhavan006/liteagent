@@ -144,7 +144,7 @@ class TaskDispatcher:
                     raise ConnectionError(f"Remote dispatch failed: {error_reason}")
                 else:
                     # Downgrade to local Medium execution
-                    print(f"Fallback triggered: degrading dispatch to local Medium-tier execution (llama3.2:3b).")
+                    print(f"Fallback triggered: degrading dispatch to local Medium-tier execution (llama3.2:3b). Reason: {error_reason}")
                     tier = "Medium"
                     
         # 3. Local execution (Small, Medium, or Large-degraded-to-Medium)
