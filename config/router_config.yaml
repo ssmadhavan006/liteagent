@@ -11,3 +11,10 @@ bias: -4.0
 routing:
   theta_low: 0.35
   theta_high: 0.75
+
+network:
+  fallback_policy: retry_then_medium # retry_then_medium, fail, medium_local
+  max_retries: 1
+  workstation_host: "localhost"
+  workstation_port: 50051
+
