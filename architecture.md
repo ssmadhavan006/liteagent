@@ -42,8 +42,22 @@ Every decision generates a `routing_margin` metric indicating proximity to bound
 The cache manager is built on `llama-cpp-python` / `llama.cpp` serialization primitives (`save_state()` / `load_state()`) which serialize running contexts as binary byte arrays, completely bypassing prefill times.
 *   **Hot Cache (VRAM/RAM)**: Holds the active context slot (exactly 1 active slot per model instance to prevent OOM errors).
 *   **Standby Cache (Host RAM)**: Stores serialized context bytes in system RAM for fast sub-millisecond swapping.
-*   **Cold Cache (SSD)**: Serializes context states to NVMe SSD disk as `.bin` files.
+*   **Cold Cache (SSD)**: Serializes context states to NVMe SSD disk as `.bin` files with companion `.json` metadata files containing cache versioning, model tags, and sizing information.
 Eviction from Standby RAM to NVMe SSD follows a **Priority-Weighted Least Recently Used (PW-LRU)** algorithm, protecting cached contexts based on static agent role priorities (`Critic` = 1.0, `Executor` = 0.8, `Planner` = 0.5, `Retriever` = 0.3) to safeguard critical reasoning loops.
+
+### KV-Cache Size Scaling Analysis
+Empirical calibration of `llama.cpp`'s state serialization reveals that the KV cache state size $S$ scales **linearly with the number of active/evaluated tokens $x$**, rather than the maximum allocated context size $N_{ctx}$:
+$$S(x) = O + G \cdot x$$
+where:
+*   $O$ is the base model metadata overhead (independent of tokens).
+*   $G$ is the growth rate in KB per token, which matches the theoretical KV tensor sizes ($G = \text{Layers} \times 2 \times \text{Heads} \times \text{Dimension} \times 2 \text{ bytes (FP16)}$).
+
+Measured parameters:
+| Model Tier | Base Overhead ($O$) | Growth Rate ($G$) | Size at 1,000 Tokens | Size at 2,000 Tokens |
+|---|---|---|---|---|
+| **Small** (`llama3.2:1b`) | 501.4 KB | 32.01 KB/token | 31.75 MB | 63.01 MB |
+| **Medium** (`llama3.2:3b`) | 501.7 KB | 112.01 KB/token | 109.88 MB | 219.26 MB |
+| **Large** (`llama3.1:8b`) | 501.8 KB | 128.01 KB/token | 125.50 MB | 250.51 MB |
 
 ## 7. Edge–Workstation Communication (gRPC)
 Coordination between the edge device and workstation is managed over a lightweight gRPC channel. Due to bandwidth constraints, serialized KV cache states (60–220 MB) are **never** transmitted across the network:
