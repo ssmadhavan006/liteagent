@@ -1,0 +1,402 @@
+[
+  {
+    "id": 1,
+    "benchmark": "HotpotQA",
+    "prompt": "What is the capital of France?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Direct single-step lookup query with short length"
+  },
+  {
+    "id": 2,
+    "benchmark": "GSM8K",
+    "prompt": "Compute 15 + 23.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Single-step basic arithmetic operation"
+  },
+  {
+    "id": 3,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function that returns True.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Trivially simple code request with zero logic"
+  },
+  {
+    "id": 4,
+    "benchmark": "HotpotQA",
+    "prompt": "What year was Barack Obama born?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Simple factual retrieval request"
+  },
+  {
+    "id": 5,
+    "benchmark": "GSM8K",
+    "prompt": "What is 50 percent of 200?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Simple single-stage percentage calculation"
+  },
+  {
+    "id": 6,
+    "benchmark": "HumanEval",
+    "prompt": "def greet(name):\n    return f'Hello {name}'",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Basic string formatting function template"
+  },
+  {
+    "id": 7,
+    "benchmark": "HotpotQA",
+    "prompt": "Who wrote the play Hamlet?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Direct single-hop literature lookup"
+  },
+  {
+    "id": 8,
+    "benchmark": "GSM8K",
+    "prompt": "A boy has 10 marbles. He loses 3. How many are left?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Basic subtraction word problem"
+  },
+  {
+    "id": 9,
+    "benchmark": "HumanEval",
+    "prompt": "Write a function that squares a number.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Trivial single-operator code generation"
+  },
+  {
+    "id": 10,
+    "benchmark": "HotpotQA",
+    "prompt": "Which country is the city of Tokyo located in?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Direct geographical lookup"
+  },
+  {
+    "id": 11,
+    "benchmark": "GSM8K",
+    "prompt": "If a store sells apples for $2 each and has a 10% discount on purchases over $10, how much do 6 apples cost?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires multi-step math reasoning (multiplication, threshold check, discount subtraction)"
+  },
+  {
+    "id": 12,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function that reverses a list without using built-in methods.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires basic algorithmic logic (looping, indexing) for list manipulation"
+  },
+  {
+    "id": 13,
+    "benchmark": "HotpotQA",
+    "prompt": "Compare the birth years of the directors of the movies 'Inception' and 'Interstellar'. Who is older?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires two lookups (directors) and a comparison logical step"
+  },
+  {
+    "id": 14,
+    "benchmark": "GSM8K",
+    "prompt": "John has 3 boxes of pens. Each box contains 12 pens. He gives 5 pens to Sarah and twice as many to Michael. How many pens does John have left?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Multi-stage arithmetic with word problems"
+  },
+  {
+    "id": 15,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function `is_prime(n)` that returns True if n is prime, else False.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Medium algorithm design requiring loops and divisibility checks"
+  },
+  {
+    "id": 16,
+    "benchmark": "HotpotQA",
+    "prompt": "Do the movies 'The Dark Knight' and 'Memento' share the same cinematographer?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires looking up crew details of two movies and comparing"
+  },
+  {
+    "id": 17,
+    "benchmark": "GSM8K",
+    "prompt": "A bakery makes 60 cookies a day. They sell 40 in the morning and 15 in the afternoon. If the remaining cookies are split equally among 5 employees, how many cookies does each employee get?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires subtraction and division steps"
+  },
+  {
+    "id": 18,
+    "benchmark": "HumanEval",
+    "prompt": "Write a function `fibonacci(n)` that returns the n-th Fibonacci number using iteration.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires standard loop-based iterative algorithm"
+  },
+  {
+    "id": 19,
+    "benchmark": "HotpotQA",
+    "prompt": "Which album was released first: 'Abbey Road' or 'Dark Side of the Moon'?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires retrieving two release dates and comparing chronology"
+  },
+  {
+    "id": 20,
+    "benchmark": "GSM8K",
+    "prompt": "A train travels at 60 mph for 2 hours, and then 75 mph for 3 hours. What is the train's average speed for the entire trip?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires calculating total distance, total time, and ratio division"
+  },
+  {
+    "id": 21,
+    "benchmark": "HumanEval",
+    "prompt": "Write a function `binary_search(arr, target)` that returns the index of target in a sorted array, or -1 if not found.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires implementing binary search logic with pointer updates"
+  },
+  {
+    "id": 22,
+    "benchmark": "HotpotQA",
+    "prompt": "Which city is located further north: Oslo, Norway or Saint Petersburg, Russia?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires retrieving latitude coordinates and comparing values"
+  },
+  {
+    "id": 23,
+    "benchmark": "GSM8K",
+    "prompt": "If a pool is filled by two pipes, where Pipe A fills it in 6 hours and Pipe B fills it in 12 hours, how long does it take to fill the pool if both pipes are open?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires rate summation calculation (1/6 + 1/12) and inversion"
+  },
+  {
+    "id": 24,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function that merges two sorted lists into one single sorted list.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires list merging and pointer comparison logic"
+  },
+  {
+    "id": 25,
+    "benchmark": "HotpotQA",
+    "prompt": "Did the composer of the Opera 'The Magic Flute' die before or after the composer of 'Symphony No. 9'?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires resolving composers, birth/death years, and comparison logic"
+  },
+  {
+    "id": 26,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python class implementing a red-black tree with insert, delete, and search methods. Ensure it is self-balancing and write unit tests for the balancing operations under tree rotations.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Very complex data structure implementation requiring extensive coding and logic"
+  },
+  {
+    "id": 27,
+    "benchmark": "GSM8K",
+    "prompt": "A farmer has a rectangular field of length 200m and width 150m. He wants to divide it into 3 equal parts. One part is for corn, one for wheat, and the third is split equally between carrots and potatoes. If carrots yield 5kg/sqm and potatoes yield 6kg/sqm, what is the total vegetable yield in kilograms?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Highly complex math problem requiring area calculation, division, partitioning, yield multiplication, and final sum"
+  },
+  {
+    "id": 28,
+    "benchmark": "HotpotQA",
+    "prompt": "Identify the historical event where the treaty signed in the capital of the country defeated in the Battle of Waterloo was ratified. What were its consequences on the defeated country's territory? Provide details from historical documents.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires deep multi-hop reasoning, historical facts resolution, and detailed text synthesis"
+  },
+  {
+    "id": 29,
+    "benchmark": "HumanEval",
+    "prompt": "Create a complete HTTP server in Python using socket programming from scratch. Implement handling for GET and POST requests, parsing query parameters, returning JSON payloads, and managing concurrent client connections with threading.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires networking sockets, raw string parsing for HTTP specs, and multi-threaded concurrency"
+  },
+  {
+    "id": 30,
+    "benchmark": "GSM8K",
+    "prompt": "A factory produces widgets. Machine A produces 40 widgets per hour and runs for 8 hours. Machine B produces 15% fewer widgets per hour than Machine A but runs for 10 hours. Machine C produces 50 widgets per hour but wastes 10% of them. If the total order is for 1000 widgets, and the factory wants to complete it in one day, how many additional widgets must be produced after running all three machines under these schedules?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Multi-machine production schedules, waste ratios, percentage decreases, and multi-step totals subtraction"
+  },
+  {
+    "id": 31,
+    "benchmark": "HotpotQA",
+    "prompt": "Determine whether the actor who played the character of Thomas Shelby in the television series Peaky Blinders has ever won an Academy Award. If so, for which film? If not, trace their nominations and compare their career milestones with the lead actor of the movie Oppenheimer.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Requires multi-hop fact retrieval, comparisons of nomination records, and career summaries"
+  },
+  {
+    "id": 32,
+    "benchmark": "HumanEval",
+    "prompt": "Write a compiler in Python that parses a subset of arithmetic expressions (supporting addition, subtraction, multiplication, and parentheses) into an Abstract Syntax Tree (AST), checks for syntactic correctness, and compiles the AST into assembly-like bytecode commands.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Extremely complex parsing, tree construction, syntactic analysis, and bytecode compilation"
+  },
+  {
+    "id": 33,
+    "benchmark": "GSM8K",
+    "prompt": "A tank is being filled by three pipes. Pipe 1 fills it at a rate of 10 gallons per minute. Pipe 2 fills it at a rate of 15 gallons per minute. Pipe 3 drains the tank at a rate of 8 gallons per minute. The tank has a capacity of 1200 gallons. If a leak develops at the bottom of the tank losing water at a rate of 2 gallons per minute, how long will it take to fill the tank from empty if it is filled up to 80% capacity?",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Complex rate equations (sum rates and subtract leaks/drains) and fractional target volume calculations"
+  },
+  {
+    "id": 34,
+    "benchmark": "HotpotQA",
+    "prompt": "Analyze the geopolitical causes of the treaty signed in the palace that was commissioned by the king who was executed during the French Revolution. Contrast this treaty's territorial divisions with the ones decided at the Congress of Vienna.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Complex historical mapping, palace commission lookups, king identification, French Revolution, and comparisons of treaties"
+  },
+  {
+    "id": 35,
+    "benchmark": "HumanEval",
+    "prompt": "Write a Python script that scrapes headlines from a news website, parses their HTML structure using BeautifulSoup, extracts entities using a lightweight regex matcher, indexes the headlines in an in-memory SQLite database, and exposes an API endpoint using socket to query headlines by entity query.",
+    "expected_tier": "High",
+    "labeler": "Manual",
+    "reason": "Chains scraping, database indexing, regex named entity mapping, and server sockets"
+  },
+  {
+    "id": 36,
+    "benchmark": "GSM8K",
+    "prompt": "A store bought 200 shirts at $10 each. They sold 50 of them at a 50% markup. They sold another 100 shirts at a 20% markup. The remaining shirts were sold at cost. What was the store's total profit and the overall percentage return on investment?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Multiple markup categories, investment totals, profit calculations, and ROI ratios"
+  },
+  {
+    "id": 37,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function to compute the edit distance (Levenshtein Distance) between two input strings using dynamic programming.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Standard dynamic programming matrix algorithm formulation"
+  },
+  {
+    "id": 38,
+    "benchmark": "HotpotQA",
+    "prompt": "Which band had more members in their classic lineup: The Beatles or Led Zeppelin?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires looking up lineups, counting members, and comparing values"
+  },
+  {
+    "id": 39,
+    "benchmark": "GSM8K",
+    "prompt": "If a garden has 4 rows of flowers with 12 flowers in each row, and 1/3 of the flowers are roses, 1/4 are tulips, and the rest are daisies, how many daisies are in the garden?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires calculating totals, fractional allocations, and subtraction"
+  },
+  {
+    "id": 40,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function to validate whether a string is a valid IPv4 address.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires split operations and range validation for integer blocks"
+  },
+  {
+    "id": 41,
+    "benchmark": "HotpotQA",
+    "prompt": "What is the capital of the country where the Nile river originates?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires finding the originating country and then its capital"
+  },
+  {
+    "id": 42,
+    "benchmark": "GSM8K",
+    "prompt": "John drives for 3 hours at 50 mph, then stops for 30 minutes, then drives for 2 hours at 60 mph. How far did he travel in total?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires segment distance calculations (time * speed) and summation"
+  },
+  {
+    "id": 43,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function to check if a string is a palindrome, ignoring casing and non-alphanumeric characters.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires character filtering and string reversal comparison"
+  },
+  {
+    "id": 44,
+    "benchmark": "HotpotQA",
+    "prompt": "Who is the current Prime Minister of the country that borders both Spain and France?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires identifying bordering country (Andorra) and resolving leader"
+  },
+  {
+    "id": 45,
+    "benchmark": "GSM8K",
+    "prompt": "If a store has a buy-one-get-one-half-off sale on $20 items, how much do you save when buying 4 items compared to paying full price?",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires calculating promotional price vs full price savings"
+  },
+  {
+    "id": 46,
+    "benchmark": "HumanEval",
+    "prompt": "Write a python function that counts the frequency of words in a text file and returns a dictionary.",
+    "expected_tier": "Medium",
+    "labeler": "Manual",
+    "reason": "Requires file I/O operations and dictionary frequency counter loop"
+  },
+  {
+    "id": 47,
+    "benchmark": "HotpotQA",
+    "prompt": "What is the currency of the country whose capital is Tokyo?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Short geographical facts question"
+  },
+  {
+    "id": 48,
+    "benchmark": "GSM8K",
+    "prompt": "Double 10 and add 5.",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Direct single-stage math command"
+  },
+  {
+    "id": 49,
+    "benchmark": "HumanEval",
+    "prompt": "print('hello')",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Extremely short standard code print statement"
+  },
+  {
+    "id": 50,
+    "benchmark": "HotpotQA",
+    "prompt": "What is the capital of Japan?",
+    "expected_tier": "Low",
+    "labeler": "Manual",
+    "reason": "Direct geographical factual query"
+  }
+]
