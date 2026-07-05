@@ -100,6 +100,7 @@ graph TD
 | Engine Choice: `llama-cpp-python` / `llama.cpp` | Bypassed Ollama API to utilize raw state serialization (`save_state()` / `load_state()`) for true three-tier cache swapping. | 2 | 2026-07-04 |
 | KV-Cache Local-Only Boundary | Serialized cache states are kept strictly local to each device and never cross the network to avoid severe bandwidth bottlenecks. | 2 | 2026-07-04 |
 | Cache Eviction: Priority-Weighted LRU (PW-LRU) | Evicts states from RAM to SSD based on both last access time and static agent role priorities (`Critic` = 1.0, `Executor` = 0.8, `Planner` = 0.5, `Retriever` = 0.3) to protect critical active agent states. | 2 | 2026-07-04 |
+| Weighted Linear Complexity Scorer | Swapped from simple heuristic check rules to a Weighted Linear Complexity Function with sigmoid scaling, providing a continuous score (Sc) and routing confidence metric. | 3 | 2026-07-05 |
 
 ### Why not Ollama?
 Ollama provides convenient high-level inference APIs but does not expose tensor-level model state serialization required for persistent KV-cache research. LiteAgent therefore employs `llama-cpp-python` for model execution while optionally reusing Ollama-managed GGUF assets through the blob resolver to avoid redundant downloads.
