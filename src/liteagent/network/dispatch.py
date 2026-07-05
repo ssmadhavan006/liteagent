@@ -99,7 +99,7 @@ class TaskDispatcher:
                     # Warm-up helper if client supports it (Task 5)
                     remote_res = self.workstation_client.dispatch_task(
                         request_id=request_id,
-                        task_id=task.get("id", "task_id"),
+                        task_id=str(task.get("id", "task_id")),
                         session_id=session_id,
                         agent_role=route["active_agents"][0] if route["active_agents"] else "Planner",
                         prompt=task["prompt"],
