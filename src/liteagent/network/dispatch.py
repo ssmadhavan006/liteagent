@@ -26,6 +26,10 @@ class TaskDispatcher:
         self.log_dir = log_dir
         self.local_models = {}
         
+        self.routing_disabled = False
+        self.cache_disabled = False
+        self.baseline_name = "liteagent"
+        
         # Load fallback policy from config
         self.fallback_policy = "retry_then_medium"
         self.max_retries = 1
@@ -51,7 +55,13 @@ class TaskDispatcher:
             "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
             "request_id": request_id,
             "component": "dispatcher",
-            "event": event
+            "event": event,
+            "baseline": self.baseline_name,
+            "feature_flags": {
+                "routing": not self.routing_disabled,
+                "cache": not self.cache_disabled,
+                "grpc": self.workstation_client is not None
+            }
         }
         if extra:
             log_entry.update(extra)
@@ -72,16 +82,27 @@ class TaskDispatcher:
         request_id = str(uuid.uuid4())
         
         # 1. Routing step
-        route = route_task(task, self.router_config_path, log_dir=self.log_dir)
-        tier = route["model_tier"]
-        location = route["execution_location"]
-        
+        if self.routing_disabled:
+            tier = "Large"
+            location = "remote"
+            active_agents = ["Planner", "Retriever", "Executor", "Critic"]
+            prompt_hash = hashlib.sha256(task["prompt"].encode("utf-8")).hexdigest()
+            route = {
+                "model_tier": "Large",
+                "execution_location": "remote",
+                "active_agents": active_agents,
+                "metadata": {"prompt_hash": prompt_hash}
+            }
+        else:
+            route = route_task(task, self.router_config_path, log_dir=self.log_dir)
+            tier = route["model_tier"]
+            location = route["execution_location"]
+            prompt_hash = route["metadata"]["prompt_hash"]
+
         self.log_event(request_id, "ROUTED", {
             "tier": tier,
             "execution_location": location
         })
-        
-        prompt_hash = route["metadata"]["prompt_hash"]
 
         # 2. Dispatch decision
         if tier == "Large" and self.workstation_client:
@@ -105,7 +126,8 @@ class TaskDispatcher:
                         prompt=task["prompt"],
                         system_prompt=system_prompt,
                         temperature=temperature,
-                        max_tokens=max_tokens
+                        max_tokens=max_tokens,
+                        cache_disabled=self.cache_disabled
                     )
                     success = True
                     break
@@ -159,13 +181,16 @@ class TaskDispatcher:
         llama = self.local_models[model_tag]
         
         # Load local cache state
-        cache_hit_tier = self.edge_cache_manager.load_cache(
-            session_key=session_id,
-            llama_instance=llama,
-            model_tag=model_tag,
-            ctx_size=512,
-            prompt_hash=prompt_hash
-        )
+        if self.cache_disabled:
+            cache_hit_tier = "MISS"
+        else:
+            cache_hit_tier = self.edge_cache_manager.load_cache(
+                session_key=session_id,
+                llama_instance=llama,
+                model_tag=model_tag,
+                ctx_size=512,
+                prompt_hash=prompt_hash
+            )
         
         self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
         
@@ -203,17 +228,19 @@ class TaskDispatcher:
         self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
         
         # Save cache locally
-        role = route["active_agents"][0] if route["active_agents"] else "Executor"
-        self.edge_cache_manager.save_cache(
-            session_key=session_id,
-            agent_role=role,
-            llama_instance=llama,
-            model_tag=model_tag,
-            ctx_size=512,
-            prompt_hash=prompt_hash
-        )
-        
-        self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
+        if self.cache_disabled:
+            pass
+        else:
+            role = route["active_agents"][0] if route["active_agents"] else "Executor"
+            self.edge_cache_manager.save_cache(
+                session_key=session_id,
+                agent_role=role,
+                llama_instance=llama,
+                model_tag=model_tag,
+                ctx_size=512,
+                prompt_hash=prompt_hash
+            )
+            self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
         
         outcome = "FALLBACK_SUCCESS" if route["model_tier"] == "Large" else "SUCCESS"
         self.log_event(request_id, "COMPLETED", {"outcome": outcome})

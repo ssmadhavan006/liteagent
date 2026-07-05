@@ -59,24 +59,27 @@ class WorkstationCoordinatorServicer(coordinator_pb2_grpc.WorkstationCoordinator
             llama = self.models[model_tag]
 
             # 2. Restore cache state
-            try:
-                cache_hit_tier = self.cache_manager.load_cache(
-                    session_key=request.session_id,
-                    llama_instance=llama,
-                    model_tag=model_tag,
-                    ctx_size=ctx_size,
-                    prompt_hash=prompt_hash
-                )
-            except CacheRestoreError as e:
-                self.cache_manager._write_log({
-                    "request_id": request.request_id,
-                    "component": "workstation_server",
-                    "event": "RESTORE_FAILED",
-                    "error": str(e)
-                })
-                context.set_code(grpc.StatusCode.INTERNAL)
-                context.set_details(f"Cache restoration failed: {e}")
-                return coordinator_pb2.TaskResponse()
+            if request.cache_disabled:
+                cache_hit_tier = "MISS"
+            else:
+                try:
+                    cache_hit_tier = self.cache_manager.load_cache(
+                        session_key=request.session_id,
+                        llama_instance=llama,
+                        model_tag=model_tag,
+                        ctx_size=ctx_size,
+                        prompt_hash=prompt_hash
+                    )
+                except CacheRestoreError as e:
+                    self.cache_manager._write_log({
+                        "request_id": request.request_id,
+                        "component": "workstation_server",
+                        "event": "RESTORE_FAILED",
+                        "error": str(e)
+                    })
+                    context.set_code(grpc.StatusCode.INTERNAL)
+                    context.set_details(f"Cache restoration failed: {e}")
+                    return coordinator_pb2.TaskResponse()
 
             server_start_compute_ts = time.time()
             
@@ -131,25 +134,28 @@ class WorkstationCoordinatorServicer(coordinator_pb2_grpc.WorkstationCoordinator
             })
 
             # 5. Save updated cache state
-            try:
-                self.cache_manager.save_cache(
-                    session_key=request.session_id,
-                    agent_role=request.agent_role,
-                    llama_instance=llama,
-                    model_tag=model_tag,
-                    ctx_size=ctx_size,
-                    prompt_hash=prompt_hash
-                )
-            except Exception as e:
-                self.cache_manager._write_log({
-                    "request_id": request.request_id,
-                    "component": "workstation_server",
-                    "event": "SAVE_FAILED",
-                    "error": str(e)
-                })
-                context.set_code(grpc.StatusCode.INTERNAL)
-                context.set_details(f"Cache serialization failed: {e}")
-                return coordinator_pb2.TaskResponse()
+            if request.cache_disabled:
+                pass
+            else:
+                try:
+                    self.cache_manager.save_cache(
+                        session_key=request.session_id,
+                        agent_role=request.agent_role,
+                        llama_instance=llama,
+                        model_tag=model_tag,
+                        ctx_size=ctx_size,
+                        prompt_hash=prompt_hash
+                    )
+                except Exception as e:
+                    self.cache_manager._write_log({
+                        "request_id": request.request_id,
+                        "component": "workstation_server",
+                        "event": "SAVE_FAILED",
+                        "error": str(e)
+                    })
+                    context.set_code(grpc.StatusCode.INTERNAL)
+                    context.set_details(f"Cache serialization failed: {e}")
+                    return coordinator_pb2.TaskResponse()
 
             # Calculate serialization time for response
             server_serialize_duration_ms = (time.time() - server_end_compute_ts) * 1000.0

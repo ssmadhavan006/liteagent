@@ -54,7 +54,8 @@ class WorkstationClient:
         system_prompt: str,
         temperature: float = 0.0,
         max_tokens: int = 100,
-        timeout: float = 30.0
+        timeout: float = 30.0,
+        cache_disabled: bool = False
     ) -> dict:
         """
         Dispatches high-complexity task and returns metrics + output dictionary.
@@ -73,7 +74,8 @@ class WorkstationClient:
             max_tokens=max_tokens,
             protocol_version=PROTOCOL_VERSION,
             request_id=request_id,
-            client_send_ts=client_send_ts
+            client_send_ts=client_send_ts,
+            cache_disabled=cache_disabled
         )
         client_serialize_ms = (time.perf_counter() - ser_start) * 1000.0
 

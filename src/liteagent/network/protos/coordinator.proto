@@ -33,6 +33,7 @@ message TaskRequest {
   int32 protocol_version = 8;
   string request_id = 9;       // Unique correlation ID
   double client_send_ts = 10;  // Unix timestamp of client send
+  bool cache_disabled = 11;    // Signals workstation server to bypass cache
 }
 
 message TaskResponse {
