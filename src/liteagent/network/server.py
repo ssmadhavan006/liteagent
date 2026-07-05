@@ -49,7 +49,7 @@ class WorkstationCoordinatorServicer(coordinator_pb2_grpc.WorkstationCoordinator
             })
             
             model_tag = "llama3.1:8b"
-            ctx_size = 2048
+            ctx_size = 4096
             prompt_hash = hashlib.sha256(request.prompt.encode("utf-8")).hexdigest()
             
             # 1. Resolve model and ensure loaded
