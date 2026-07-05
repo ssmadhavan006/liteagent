@@ -63,7 +63,23 @@ Measured parameters:
 Coordination between the edge device and workstation is managed over a lightweight gRPC channel. Due to bandwidth constraints, serialized KV cache states (60–220 MB) are **never** transmitted across the network:
 *   At 100 Mbps, transferring a 200 MB state takes **16.0 seconds**, which is 53x slower than GPU prefill.
 *   Even at 1 Gbps, transferring takes **1.6 seconds**, which exceeds GPU prefill times.
-Instead, the Pi 5 dispatches tasks sending only the prompt text and `session_id`. The workstation resolves the cache key locally, loads the local context state from its NVMe SSD, performs inference, saves the updated state locally, and returns only the output text and performance metrics.
+Instead, the Pi 5 dispatches tasks sending only the prompt text, `session_id`, and `request_id`. The workstation resolves the cache key locally, loads the local context state from its local SSD, performs inference, saves the updated state locally, and returns only the output text and performance metrics.
+
+### 1. Protobuf Interface & Versioning
+The gRPC service schema (`src/liteagent/network/protos/coordinator.proto`) exposes:
+*   `Ping`: Health check and protocol/software compatibility verification (sends `protocol_version` and returns `compatible`, `model_version`, `llama_cpp_version`, and `liteagent_version`).
+*   `DispatchTask`: Executes remote High-complexity tasks on the Large-tier workstation.
+
+### 2. Clock-Drift-Independent Latency Profiling
+To evaluate communication RTT delay without requiring synchronized edge/workstation system clocks, we track relative local elapsed durations:
+$$\text{communication\_overhead\_ms} = \text{client\_e2e} - (\text{client\_serialize} + \text{server\_queue} + \text{server\_compute} + \text{server\_serialize} + \text{client\_deserialize})$$
+This residual reports the pure transport/network/scheduling overhead, preventing clock drift from producing negative values.
+
+### 3. Policy-Driven Network Fallbacks
+If the gRPC client encounters network exceptions or connection timeouts, a configurable `fallback_policy` is triggered:
+*   `medium_local`: Gracefully degrades execution to the local Medium-tier model (`llama3.2:3b`) on the edge with local cache swaps, logging a `FALLBACK` event to prevent crash failures.
+*   `fail`: Immediately fails the task and propagates a connection exception.
+*   `retry_then_medium`: Retries the connection (default = 1 retry) before falling back to `medium_local`.
 
 ## 8. Data Flow Diagram
 ```mermaid
