@@ -47,15 +47,15 @@ class GPUPowerTracker:
         self._thread = threading.Thread(target=self._poll, daemon=True)
         self._thread.start()
         
-    def stop(self) -> float:
+    def stop(self) -> tuple[float, int]:
         self._stop_event.set()
         if self._thread:
             self._thread.join()
         if not self.power_samples:
-            return 0.0
+            return 0.0, 0
         # Energy (Joules) = Sum of Power (Watts) * delta_t (seconds)
         energy = sum(self.power_samples) * self.interval
-        return energy
+        return energy, len(self.power_samples)
 
 class EvaluationHarness:
     """
@@ -78,6 +78,25 @@ class EvaluationHarness:
         # Ensure directories exist
         os.makedirs(os.path.dirname(self.results_path), exist_ok=True)
         os.makedirs(os.path.dirname(self.failed_path), exist_ok=True)
+        
+        self.completed_tasks = self.get_completed_tasks()
+
+    def get_completed_tasks(self) -> set[str]:
+        """
+        Reads results_path and returns the set of completed task IDs for the current baseline.
+        """
+        completed = set()
+        if os.path.exists(self.results_path):
+            with open(self.results_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        try:
+                            rec = json.loads(line)
+                            if rec.get("baseline") == self.baseline_name:
+                                completed.add(rec.get("task_id"))
+                        except Exception:
+                            pass
+        return completed
 
     def format_hotpotqa_prompt(self, item: Dict[str, Any]) -> str:
         paragraphs = []
@@ -100,6 +119,10 @@ class EvaluationHarness:
         """
         Executes a single benchmark task while polling GPU energy.
         """
+        if task_id in self.completed_tasks:
+            print(f"    Task {task_id} already completed for baseline {self.baseline_name}. Skipping...")
+            return {"success": True, "skipped": True}
+
         # Determine prompt text
         if dataset == "gsm8k":
             prompt = task_item.get("question", "")
@@ -126,7 +149,7 @@ class EvaluationHarness:
                 max_tokens=max_tokens
             )
             latency_ms = (time.time() - start_time) * 1000.0
-            energy_joules = self.power_tracker.stop()
+            energy_joules, energy_samples = self.power_tracker.stop()
             
             response = res.get("response_text", "")
             prefill_tokens = res.get("prefill_tokens", 0)
@@ -138,7 +161,7 @@ class EvaluationHarness:
             
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000.0
-            energy_joules = self.power_tracker.stop()
+            energy_joules, energy_samples = self.power_tracker.stop()
             
             err_str = str(e)
             if "EXPECTED_LIMIT_REACHED" in err_str:
@@ -213,6 +236,7 @@ class EvaluationHarness:
             "quality_score_extra": quality_extra,
             "latency_ms": latency_ms,
             "energy_joules": energy_joules,
+            "energy_samples": energy_samples,
             "prefill_tokens": prefill_tokens,
             "tokens_generated": tokens_gen,
             "cache_hit_tier": cache_hit_tier,
