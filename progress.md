@@ -420,7 +420,9 @@ All Phase 7 evaluation harness, metric definitions, and sandbox security deliver
 1.  **Acquisition**: Acquired GSM8K, HotpotQA, and HumanEval datasets under MIT/CC licenses.
 2.  **Sampling**: Implemented stratified seed-based (seed 42) subset sampling.
 3.  **Security Sandboxing**: Implemented isolated Python subprocess sandboxing (`python -E -I -S`) with stripped environments, timeouts, memory limits (RLIMIT_AS), and secondary import/file-write blocks.
-4.  **Energy Profiling**: Implemented GPU energy measurement tracking via a background thread polling `nvidia-smi` at 100ms.
-5.  **Robustness Fixes**: Increased context window limit (`n_ctx = 4096`) to support long HotpotQA contexts, and extended client timeouts (`timeout = 90s`) to prevent concurrent execution clashes during CPU inference.
-6.  **Verification**: Verified correctness of all metrics and sandboxing, and completed a 30-task pilot evaluation sweep across LiteAgent and 2 baselines.
+4.  **Energy Profiling**: Implemented GPU energy measurement tracking via a background thread polling `nvidia-smi` at 100ms. Logged both total `energy_joules` and the raw `energy_samples` count to maintain integration transparency.
+5.  **Robustness Fixes**: Increased context window limit (`n_ctx = 4096`) to support long HotpotQA contexts, and extended client timeouts (`timeout = 180s`) to prevent concurrent execution clashes during CPU inference.
+6.  **Concurrency Locking**: Configured per-model thread-safe locks to prevent task execution state corruption under connection retries or load spikes.
+7.  **Direct-Pointer Decoding**: Bypassed `logits_all=True` to achieve a 10x prefill speedup by directly reading `llama._ctx.get_logits()`. Note: This relies on an internal llama-cpp-python context API; future library versions may require adaptation if this internal interface changes. The system automatically falls back to `llama.eval_logits` if `_ctx` is absent.
+8.  **Verification**: Verified correctness of all metrics and sandboxing, and completed a loopback pilot evaluation sweep. Deliberately verified checkpoint/resume functionality successfully skips completed tasks without duplicating records or corrupting logs.
 

@@ -156,4 +156,10 @@ LiteAgent includes a multi-dataset evaluation harness that isolates executions a
 - **Subprocess-Level Security Sandboxing**: HumanEval code solutions are executed in isolated Python subprocesses (`python -E -I -S`) with stripped environment variables, strict timeouts, memory limits (RLIMIT_AS), and secondary import/file-write restrictions to prevent unintended system access.
 - **GPU Power Profiling**: Energy consumption is tracked by launching an independent background thread polling `nvidia-smi` every 100ms and integrating power draw over the execution window.
 
+### 10.1. Low-Level API Dependency (Direct-Pointer Decoding)
+To bypass the performance bottleneck of `logits_all=True` during prefill (which calculates logits for all prompt tokens), LiteAgent bypasses the high-level `llama.eval_logits` interface. Instead, it reads the logits for the last token directly from the low-level context pointer:
+`llama._ctx.get_logits()`
+*   **Warning**: This relies on an internal, unstable `llama-cpp-python` context API. Future library versions or major upgrades may require adaptation if this internal interface changes.
+*   **Fallback**: The system automatically checks for the existence of `_ctx` and falls back to `llama.eval_logits` if it is absent (e.g. during unit tests using `MockLlama`).
+
 
