@@ -124,6 +124,9 @@ class ExecutorAgent(Agent):
         # Supplied by the harness and identical for every system under test, so
         # the chain gains no scoring advantage from knowing the answer format.
         self.output_contract = output_contract
+        # Cleared when a rejection escalates to a larger tier: that model should
+        # attempt the task fresh rather than be anchored to a wrong answer.
+        self.include_feedback = True
 
     def system_prompt(self, bb: Blackboard) -> str:
         if self.output_contract:
@@ -155,7 +158,7 @@ class ExecutorAgent(Agent):
         sections.append(f"Task:\n{bb.prompt}")
 
         critique = bb.latest(CRITIQUE)
-        if critique is not None and not critique.metadata.get("approved", True):
+        if self.include_feedback and critique is not None and not critique.metadata.get("approved", True):
             previous = bb.content_of(DRAFT)
             sections.append(
                 f"Your previous attempt:\n{previous}\n\n"

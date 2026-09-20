@@ -62,6 +62,42 @@ def build_routing_only_runner(**kwargs) -> LiteAgentRunner:
     return runner
 
 
+def build_fixed_tier_runner(tier: str, **kwargs) -> LiteAgentRunner:
+    """
+    Pins every task to one tier, with the full agent chain and caching active.
+
+    `always-medium` is the comparator that matters: on the capability-labelled
+    set it solves 81.9% of solvable tasks at 43% of always-large's cost, so any
+    routing policy has to beat that trade rather than merely beat always-large.
+    """
+    if tier not in ("Small", "Medium", "Large"):
+        raise ValueError(f"Unknown tier: {tier}")
+    runner = LiteAgentRunner(baseline_name=f"always_{tier.lower()}", **kwargs)
+    runner.dispatcher.routing_disabled = True
+    runner.dispatcher.cache_disabled = False
+    runner.orchestrator.force_tier = tier
+    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    return runner
+
+
+def build_cascade_runner(**kwargs) -> LiteAgentRunner:
+    """
+    Starts at the smallest tier and escalates when the Critic rejects.
+
+    Replaces a-priori tier prediction, which does not generalise
+    (docs/phase9/router_capability_analysis.md), with observed failure. Solve
+    rate is then bounded by the Critic's specificity and cost by its
+    sensitivity, neither of which requires predicting difficulty.
+    """
+    runner = LiteAgentRunner(baseline_name="cascade", **kwargs)
+    runner.dispatcher.routing_disabled = True
+    runner.dispatcher.cache_disabled = False
+    runner.orchestrator.force_tier = "Small"
+    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    runner.orchestrator.escalate_on_reject = True
+    return runner
+
+
 def build_cache_only_runner(**kwargs) -> LiteAgentRunner:
     """
     Caching active; routing disabled.

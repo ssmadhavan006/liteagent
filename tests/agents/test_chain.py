@@ -261,6 +261,106 @@ def test_routing_disabled_ablation_pins_tier_and_runs_every_agent():
     assert [t["agent"] for t in skipped] == ["Retriever"]
 
 
+def test_cascade_escalates_tier_on_rejection():
+    """Observed failure drives tier choice, replacing a-priori prediction."""
+    calls = {"n": 0}
+
+    def critic_then_accept(_n):
+        # Reject at Small and Medium, accept once escalated to Large.
+        calls["n"] += 1
+        return "APPROVE" if calls["n"] >= 3 else "REVISE: wrong"
+
+    dispatcher = RecordingDispatcher(responses={"Critic": critic_then_accept})
+    orch = make_orchestrator(dispatcher)
+    orch.force_tier = "Small"
+    orch.force_agents = ["Executor", "Critic"]
+    orch.escalate_on_reject = True
+
+    res = orch.execute_task(
+        task={"id": "c1", "prompt": "2+2", "benchmark": "gsm8k"},
+        session_id="sc1",
+    )
+
+    tiers = [c["tier"] for c in dispatcher.calls if c["agent_role"] == "Executor"]
+    assert tiers == ["Small", "Medium", "Large"]
+    assert res["escalations"] == 2
+    assert res["executed_tier"] == "Large"
+
+
+def test_cascade_stops_at_top_tier():
+    dispatcher = RecordingDispatcher(responses={"Critic": lambda n: "REVISE: still wrong"})
+    orch = make_orchestrator(dispatcher)
+    orch.force_tier = "Small"
+    orch.force_agents = ["Executor", "Critic"]
+    orch.escalate_on_reject = True
+
+    res = orch.execute_task(
+        task={"id": "c2", "prompt": "2+2", "benchmark": "gsm8k"},
+        session_id="sc2",
+    )
+    assert res["escalations"] == 2, "must not escalate past the largest tier"
+    assert res["executed_tier"] == "Large"
+
+
+def test_escalated_attempt_is_not_anchored_to_rejected_answer():
+    """The larger model retries the task, it does not patch a wrong answer."""
+    calls = {"n": 0}
+
+    def critic(_n):
+        calls["n"] += 1
+        return "APPROVE" if calls["n"] >= 2 else "REVISE: wrong"
+
+    dispatcher = RecordingDispatcher(responses={"Critic": critic})
+    orch = make_orchestrator(dispatcher)
+    orch.force_tier = "Small"
+    orch.force_agents = ["Executor", "Critic"]
+    orch.escalate_on_reject = True
+
+    orch.execute_task(task={"id": "c3", "prompt": "2+2", "benchmark": "gsm8k"},
+                      session_id="sc3")
+
+    escalated = [c for c in dispatcher.calls if c["agent_role"] == "Executor"][1]
+    assert "Reviewer feedback" not in escalated["prompt"]
+
+
+def test_escalated_step_uses_a_distinct_cache_key():
+    """KV state is model-specific; tiers must not share a cache entry."""
+    calls = {"n": 0}
+
+    def critic(_n):
+        calls["n"] += 1
+        return "APPROVE" if calls["n"] >= 2 else "REVISE: wrong"
+
+    dispatcher = RecordingDispatcher(responses={"Critic": critic})
+    orch = make_orchestrator(dispatcher)
+    orch.force_tier = "Small"
+    orch.force_agents = ["Executor", "Critic"]
+    orch.escalate_on_reject = True
+
+    orch.execute_task(task={"id": "c4", "prompt": "2+2", "benchmark": "gsm8k"},
+                      session_id="sc4")
+
+    exec_keys = [c["session_key"] for c in dispatcher.calls if c["agent_role"] == "Executor"]
+    assert len(set(exec_keys)) == len(exec_keys)
+    assert "Small" in exec_keys[0] and "Medium" in exec_keys[1]
+
+
+def test_revision_mode_stays_on_tier_when_escalation_disabled():
+    dispatcher = RecordingDispatcher(responses={"Critic": lambda n: "REVISE: wrong"})
+    orch = make_orchestrator(dispatcher, max_revisions=1)
+    orch.force_tier = "Medium"
+    orch.force_agents = ["Executor", "Critic"]
+    orch.escalate_on_reject = False
+
+    res = orch.execute_task(
+        task={"id": "c5", "prompt": "2+2", "benchmark": "gsm8k"},
+        session_id="sc5",
+    )
+    assert res["escalations"] == 0
+    assert res["revisions"] == 1
+    assert {c["tier"] for c in dispatcher.calls} == {"Medium"}
+
+
 def test_executor_failure_propagates():
     class BrokenExecutor(RecordingDispatcher):
         def execute_agent_step(self, **kwargs):

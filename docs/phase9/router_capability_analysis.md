@@ -138,9 +138,57 @@ parameters are not written to `config/router_config.yaml`, because the refit is
 only competitive when it stops routing altogether — replacing a bad router with
 a constant would remove the mechanism under study rather than improve it.
 
+## 7. Policy comparison and the resulting design change
+
+Per-tier costs are the mean attempt latencies measured during labelling on this
+hardware: Small 12.9 s, Medium 17.1 s, High 39.5 s.
+
+| Policy | Solved | Cost |
+| :--- | :---: | :---: |
+| always-small | 37.2% | 1209 s |
+| **always-medium** | **81.9%** | **1611 s** |
+| oracle-router (unreachable) | 100% | 1841 s |
+| shipped-router | 94.7% | 2751 s |
+| cascade, perfect verifier | 100% | 2891 s |
+| always-large (`static_full`) | 100% | 3711 s |
+
+Three readings matter.
+
+**The shipped router's solve rate overstates it.** It gets 94.7% of tasks onto a
+sufficient tier while choosing the *correct* tier only 27% of the time, because
+its errors skew toward over-provisioning. It buys quality with cost, not with
+accuracy — and at 2751 s it is only 26% cheaper than never routing at all.
+
+**always-medium is the baseline to beat.** 81.9% of solvable tasks at 43% of
+always-large's cost. It was not previously in the comparator set, so no prior
+result in this project was measured against it. It is now
+(`always_small`/`always_medium`/`always_large` in the evaluation driver).
+
+**A cascade is not free, but it dominates always-large.** Escalating pays for
+every failed attempt, so even a perfect verifier costs 57% more than a perfect
+router (2891 s vs 1841 s). It is still 22% cheaper than always-large at
+identical 100% quality, and always-large is the current `static_full` baseline.
+
+### Design change
+
+Tier selection moves from prediction to observation. `AgentOrchestrator` gains
+`escalate_on_reject`: a Critic rejection re-runs the task on the next tier up
+instead of asking the same model again. The escalated attempt is issued fresh —
+the feedback block is suppressed — so the larger model is not anchored to the
+rejected answer, and the cache session key includes the tier because KV state is
+model-specific.
+
+This converts an unsolvable prediction problem into a measurable verification
+problem: solve rate is bounded by the Critic's specificity, cost by its
+sensitivity. **Both are currently unmeasured**, and they decide whether the
+cascade is viable. Measuring Critic sensitivity/specificity against the
+capability labels is the next experiment, and the cascade must not be claimed to
+work until that number exists.
+
 Reproduce with:
 
 ```
 uv run python -m tests.router.calibrate_router
 uv run python -m tests.router.analyze_labels
+uv run python -m tests.router.cascade_analysis
 ```

@@ -23,8 +23,12 @@ DATASETS = ("gsm8k", "hotpotqa", "humaneval")
 
 CONFIGS = (
     "liteagent",
+    "cascade",
     "routing_only",
     "cache_only",
+    "always_small",
+    "always_medium",
+    "always_large",
     "static_full",
     "routellm_heuristic",
     "flat_cache",
@@ -59,6 +63,8 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
     from liteagent.runner import (
         LiteAgentRunner,
         build_cache_only_runner,
+        build_cascade_runner,
+        build_fixed_tier_runner,
         build_routing_only_runner,
     )
 
@@ -71,10 +77,14 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
 
     if config == "liteagent":
         return LiteAgentRunner(**common)
+    if config == "cascade":
+        return build_cascade_runner(**common)
     if config == "routing_only":
         return build_routing_only_runner(**common)
     if config == "cache_only":
         return build_cache_only_runner(**common)
+    if config.startswith("always_"):
+        return build_fixed_tier_runner(config.split("_", 1)[1].capitalize(), **common)
 
     if config == "static_full":
         from liteagent.baselines.static_full_pipeline import StaticFullPipelineRunner

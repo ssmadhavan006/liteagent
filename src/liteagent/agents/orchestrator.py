@@ -8,6 +8,9 @@ from liteagent.router.router import route_task
 
 logger = logging.getLogger("liteagent.agents.orchestrator")
 
+# Cheapest to most capable. Escalation walks up this ladder.
+TIER_LADDER = ["Small", "Medium", "Large"]
+
 
 class AgentOrchestrator:
     """
@@ -35,6 +38,12 @@ class AgentOrchestrator:
         # Set by the routing-disabled ablation to pin tier/agent selection.
         self.force_tier = None
         self.force_agents = None
+        # Cascade mode: on a Critic rejection, retry on the next larger tier
+        # instead of asking the same model again. Difficulty is not predictable
+        # from the prompt (docs/phase9/router_capability_analysis.md), so the
+        # cascade observes failure rather than trying to anticipate it.
+        self.escalate_on_reject = False
+        self.max_escalations = 2
 
     def _build_blackboard(self, task: dict) -> Blackboard:
         context = task.get("context") or {}
@@ -105,7 +114,10 @@ class AgentOrchestrator:
                     prompt=agent.build_prompt(bb),
                     system_prompt=agent.system_prompt(bb),
                     agent_role=agent.role,
-                    session_key=f"{session_id}::{agent.role}",
+                    # Tier is part of the key: KV state is model-specific, so an
+                    # escalated step must not collide with the smaller model's
+                    # entry for the same role.
+                    session_key=f"{session_id}::{tier}::{agent.role}",
                     tier=tier,
                     request_id=request_id,
                     temperature=temperature,
@@ -155,13 +167,30 @@ class AgentOrchestrator:
             if role in agents:
                 run_agent(agents[role])
 
-        # Bounded revision loop: only when an active Critic actually rejected.
+        # A Critic rejection either retries on the same tier (revision) or moves
+        # up the ladder (cascade). `tier` is read by run_agent from this scope,
+        # so reassigning it here redirects subsequent steps to the new tier.
         revisions = 0
-        while revisions < self.max_revisions and "Critic" in agents and "Executor" in agents:
+        escalations = 0
+        while "Critic" in agents and "Executor" in agents:
             critique = bb.latest(CRITIQUE)
             if critique is None or critique.metadata.get("approved", True):
                 break
-            revisions += 1
+
+            if self.escalate_on_reject:
+                position = TIER_LADDER.index(tier) if tier in TIER_LADDER else len(TIER_LADDER) - 1
+                if position + 1 >= len(TIER_LADDER) or escalations >= self.max_escalations:
+                    break
+                tier = TIER_LADDER[position + 1]
+                escalations += 1
+                # Fresh attempt: the larger model should not be anchored to the
+                # smaller model's rejected answer.
+                agents["Executor"].include_feedback = False
+            else:
+                if revisions >= self.max_revisions:
+                    break
+                revisions += 1
+
             if not run_agent(agents["Executor"], revision_pass=True):
                 break
             run_agent(agents["Critic"], revision_pass=True)
@@ -177,7 +206,7 @@ class AgentOrchestrator:
             "latency_ms": round((time.time() - chain_start) * 1000.0, 2),
             "cache_hit_tier": cache_tiers[0] if cache_tiers else "NONE",
             "cache_hit_tiers": cache_tiers,
-            "routed_tier": tier,
+            "routed_tier": route.get("model_tier", tier),
             "executed_tier": tier,
             "fallback_occurred": any(t.get("fallback_occurred") for t in trace),
             "request_id": request_id,
@@ -186,5 +215,6 @@ class AgentOrchestrator:
             "pruned_agents": pruned,
             "model_calls": totals["model_calls"],
             "revisions": revisions,
+            "escalations": escalations,
             "message_transcript": bb.transcript(),
         }

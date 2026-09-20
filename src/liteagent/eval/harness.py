@@ -199,6 +199,7 @@ class EvaluationHarness:
             pruned_agents = res.get("pruned_agents", [])
             model_calls = res.get("model_calls", 1)
             revisions = res.get("revisions", 0)
+            escalations = res.get("escalations", 0)
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000.0
@@ -301,7 +302,8 @@ class EvaluationHarness:
             "executed_tier": executed_tier,
             "fallback_occurred": fallback_occurred,
             "model_calls": model_calls,
-            "revisions": revisions
+            "revisions": revisions,
+            "escalations": escalations
           },
           "agents": {
             "active_agents": active_agents,
