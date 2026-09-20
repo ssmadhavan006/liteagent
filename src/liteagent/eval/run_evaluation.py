@@ -24,6 +24,7 @@ DATASETS = ("gsm8k", "hotpotqa", "humaneval")
 CONFIGS = (
     "liteagent",
     "cascade",
+    "exec_cascade",
     "routing_only",
     "cache_only",
     "always_small",
@@ -65,6 +66,7 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
         LiteAgentRunner,
         build_cache_only_runner,
         build_cascade_runner,
+        build_exec_cascade_runner,
         build_fixed_tier_runner,
         build_flat_cache_runner,
         build_routing_only_runner,
@@ -81,6 +83,8 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
         return LiteAgentRunner(**common)
     if config == "cascade":
         return build_cascade_runner(**common)
+    if config == "exec_cascade":
+        return build_exec_cascade_runner(**common)
     if config == "routing_only":
         return build_routing_only_runner(**common)
     if config == "cache_only":

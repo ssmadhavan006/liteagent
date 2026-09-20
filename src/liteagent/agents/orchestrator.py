@@ -44,6 +44,12 @@ class AgentOrchestrator:
         # cascade observes failure rather than trying to anticipate it.
         self.escalate_on_reject = False
         self.max_escalations = 2
+        # How a draft is judged before escalating.
+        #   "critic"    ask the LLM Critic (Youden's J near zero; see phase9)
+        #   "execution" run the prompt's own worked examples, where correctness
+        #               is decidable rather than predictable
+        #   "auto"      execution where available, Critic otherwise
+        self.verifier = "critic"
 
     def _build_blackboard(self, task: dict) -> Blackboard:
         context = task.get("context") or {}
@@ -191,11 +197,32 @@ class AgentOrchestrator:
         # A Critic rejection either retries on the same tier (revision) or moves
         # up the ladder (cascade). `tier` is read by run_agent from this scope,
         # so reassigning it here redirects subsequent steps to the new tier.
+        def current_verdict() -> tuple[bool, str]:
+            """
+            Judges the standing draft. Execution beats asking a model whenever
+            the prompt carries runnable examples: it decides correctness instead
+            of predicting it, and costs no model call.
+            """
+            if (self.verifier in ("auto", "execution")
+                    and bb.benchmark == "humaneval" and bb.entry_point):
+                from liteagent.eval.exec_verifier import verify_completion
+                res = verify_completion(bb.content_of(DRAFT), bb.prompt, bb.entry_point)
+                if res["verdict"] in ("pass", "fail"):
+                    return res["verdict"] == "pass", "execution"
+                # "unverifiable" carries no signal; fall through rather than
+                # treating absence of evidence as approval.
+            critique = bb.latest(CRITIQUE)
+            if critique is None:
+                return True, "none"
+            return bool(critique.metadata.get("approved", True)), "critic"
+
         revisions = 0
         escalations = 0
-        while "Critic" in agents and "Executor" in agents:
-            critique = bb.latest(CRITIQUE)
-            if critique is None or critique.metadata.get("approved", True):
+        verdict_sources: list[str] = []
+        while "Executor" in agents:
+            approved, source = current_verdict()
+            verdict_sources.append(source)
+            if approved or source == "none":
                 break
 
             if self.escalate_on_reject:
@@ -214,7 +241,10 @@ class AgentOrchestrator:
 
             if not run_agent(agents["Executor"], revision_pass=True):
                 break
-            run_agent(agents["Critic"], revision_pass=True)
+            # Only re-run the Critic when it is the verifier; execution
+            # verification re-judges the new draft for free on the next pass.
+            if "Critic" in agents:
+                run_agent(agents["Critic"], revision_pass=True)
 
         final_answer = bb.content_of(DRAFT)
         if not final_answer:
@@ -241,5 +271,6 @@ class AgentOrchestrator:
             "model_calls": totals["model_calls"],
             "revisions": revisions,
             "escalations": escalations,
+            "verdict_sources": verdict_sources,
             "message_transcript": bb.transcript(),
         }

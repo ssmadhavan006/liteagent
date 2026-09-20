@@ -4,6 +4,11 @@ from liteagent.agents.orchestrator import AgentOrchestrator
 from liteagent.cache import KVCacheManager
 from liteagent.network.dispatch import TaskDispatcher
 
+# Mirrors router/pruning.py: the Critic is excluded on measured evidence (it won
+# 0 and lost 4 over 25 identical GSM8K tasks). The cascade re-adds it, since
+# there a rejection drives escalation rather than a revision.
+DEFAULT_CHAIN = ["Planner", "Retriever", "Executor"]
+
 
 class LiteAgentRunner:
     """
@@ -81,7 +86,7 @@ def build_flat_cache_runner(tier: str = "Medium", slots: int = 2, **kwargs) -> L
     runner.dispatcher.routing_disabled = True
     runner.dispatcher.cache_disabled = False
     runner.orchestrator.force_tier = tier
-    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    runner.orchestrator.force_agents = DEFAULT_CHAIN
     return runner
 
 
@@ -99,7 +104,7 @@ def build_fixed_tier_runner(tier: str, **kwargs) -> LiteAgentRunner:
     runner.dispatcher.routing_disabled = True
     runner.dispatcher.cache_disabled = False
     runner.orchestrator.force_tier = tier
-    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    runner.orchestrator.force_agents = DEFAULT_CHAIN
     return runner
 
 
@@ -121,6 +126,25 @@ def build_cascade_runner(**kwargs) -> LiteAgentRunner:
     return runner
 
 
+def build_exec_cascade_runner(**kwargs) -> LiteAgentRunner:
+    """
+    Cascade whose escalation trigger is execution, not a model's opinion.
+
+    The LLM Critic cannot discriminate correct answers from incorrect ones, so a
+    Critic-gated cascade is dominated by fixed-tier selection. Where the prompt
+    carries runnable examples the question is decidable instead: run the code.
+    No Critic is in the chain, so a rejection costs zero extra model calls.
+    """
+    runner = LiteAgentRunner(baseline_name="exec_cascade", **kwargs)
+    runner.dispatcher.routing_disabled = True
+    runner.dispatcher.cache_disabled = False
+    runner.orchestrator.force_tier = "Small"
+    runner.orchestrator.force_agents = DEFAULT_CHAIN
+    runner.orchestrator.escalate_on_reject = True
+    runner.orchestrator.verifier = "execution"
+    return runner
+
+
 def build_cache_only_runner(**kwargs) -> LiteAgentRunner:
     """
     Caching active; routing disabled.
@@ -133,5 +157,5 @@ def build_cache_only_runner(**kwargs) -> LiteAgentRunner:
     runner.dispatcher.routing_disabled = True
     runner.dispatcher.cache_disabled = False
     runner.orchestrator.force_tier = "Large"
-    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    runner.orchestrator.force_agents = DEFAULT_CHAIN
     return runner

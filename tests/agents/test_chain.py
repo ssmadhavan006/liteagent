@@ -379,3 +379,81 @@ def test_executor_failure_propagates():
             task={"id": "t6", "prompt": "2+2", "benchmark": "gsm8k"},
             session_id="s6",
         )
+
+
+# --- execution-gated escalation (H1') -------------------------------------------
+
+HE_PROMPT = ('def add_one(xs):\n    """Add one.\n'
+             '    >>> add_one([1, 2])\n    [2, 3]\n    """\n')
+
+
+def _exec_orch(dispatcher, **kw):
+    orch = make_orchestrator(dispatcher, **kw)
+    orch.force_tier = "Small"
+    orch.force_agents = ["Executor"]      # no Critic: execution is the verifier
+    orch.escalate_on_reject = True
+    orch.verifier = "execution"
+    return orch
+
+
+def _he_task():
+    return {"id": "h1", "prompt": HE_PROMPT, "benchmark": "humaneval",
+            "context": {"entry_point": "add_one"}}
+
+
+def test_execution_verifier_escalates_on_wrong_code():
+    """A draft that fails the prompt's own examples must move up a tier."""
+    wrong, right = "    return [x - 1 for x in xs]", "    return [x + 1 for x in xs]"
+    calls = {"n": 0}
+
+    def executor(_n):
+        calls["n"] += 1
+        return wrong if calls["n"] == 1 else right
+
+    dispatcher = RecordingDispatcher(responses={"Executor": executor})
+    res = _exec_orch(dispatcher).execute_task(task=_he_task(), session_id="e1")
+
+    tiers = [c["tier"] for c in dispatcher.calls if c["agent_role"] == "Executor"]
+    assert tiers == ["Small", "Medium"], "wrong code should have escalated once"
+    assert res["escalations"] == 1
+    assert res["verdict_sources"][0] == "execution"
+
+
+def test_execution_verifier_accepts_correct_code_without_escalating():
+    dispatcher = RecordingDispatcher(responses={"Executor": lambda n: "    return [x + 1 for x in xs]"})
+    res = _exec_orch(dispatcher).execute_task(task=_he_task(), session_id="e2")
+
+    assert res["escalations"] == 0, "correct code must not be escalated"
+    assert res["verdict_sources"] == ["execution"]
+
+
+def test_execution_verdict_costs_no_model_call():
+    """Unlike the Critic, verification is free: no Critic turn is dispatched."""
+    dispatcher = RecordingDispatcher(responses={"Executor": lambda n: "    return [x + 1 for x in xs]"})
+    _exec_orch(dispatcher).execute_task(task=_he_task(), session_id="e3")
+
+    assert "Critic" not in dispatcher.roles_called()
+
+
+def test_unverifiable_prompt_does_not_count_as_approval():
+    """Absence of examples is not evidence of correctness."""
+    prompt = 'def f(x):\n    """No examples."""\n'
+    dispatcher = RecordingDispatcher(responses={"Executor": lambda n: "    return x"})
+    orch = _exec_orch(dispatcher)
+    res = orch.execute_task(
+        task={"id": "h2", "prompt": prompt, "benchmark": "humaneval",
+              "context": {"entry_point": "f"}},
+        session_id="e4",
+    )
+    # No Critic is present either, so the chain stops rather than escalating
+    # blindly - but the verdict must not be recorded as an execution pass.
+    assert res["verdict_sources"][0] != "execution"
+    assert res["escalations"] == 0
+
+
+def test_execution_verifier_unused_for_non_code_benchmarks():
+    dispatcher = RecordingDispatcher(responses={"Executor": lambda n: "42"})
+    orch = _exec_orch(dispatcher)
+    res = orch.execute_task(
+        task={"id": "g1", "prompt": "2+2", "benchmark": "gsm8k"}, session_id="e5")
+    assert "execution" not in res["verdict_sources"]
