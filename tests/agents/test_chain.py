@@ -178,6 +178,10 @@ def test_critic_rejection_triggers_bounded_revision():
         "Executor": lambda n: f"draft-{n}",
     })
     orch = make_orchestrator(dispatcher, max_revisions=1)
+    # The Critic is no longer routed by default, so this exercises the
+    # revision path explicitly rather than relying on tier mapping.
+    orch.force_tier = "Large"
+    orch.force_agents = ["Executor", "Critic"]
 
     long_prompt = (
         "Write a Python class implementing a red-black tree with insert, delete, "

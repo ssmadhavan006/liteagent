@@ -31,12 +31,14 @@ def test_pruning_high_complexity():
     tier, location, active, pruned = map_tier_and_pruning(0.80, 0.25, 0.75)
     assert tier == "Large"
     assert location == "Workstation"
-    assert active == ["Planner", "Executor", "Critic"]
-    assert pruned == ["Retriever"]
+    # The Critic is excluded from the default chain on measured evidence: it
+    # never improved a task and degraded four (see docs/phase9/).
+    assert active == ["Planner", "Executor"]
+    assert set(pruned) == {"Retriever", "Critic"}
 
     tier, location, active, pruned = map_tier_and_pruning(0.80, 0.25, 0.75, benchmark="hotpotqa")
-    assert active == ["Planner", "Retriever", "Executor", "Critic"]
-    assert pruned == []
+    assert active == ["Planner", "Retriever", "Executor"]
+    assert pruned == ["Critic"]
 
 def test_active_agents_preserve_canonical_chain_order():
     for benchmark in (None, "gsm8k", "hotpotqa", "humaneval"):

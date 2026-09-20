@@ -27,7 +27,16 @@ def map_tier_and_pruning(score: float, theta_low: float, theta_high: float, benc
     else:
         model_tier = "Large"
         execution_location = "Workstation"
-        active_agents = ["Planner", "Executor", "Critic"]
+        # The Critic is excluded from the default chain on measured evidence.
+        # Its verdicts do not discriminate correct from incorrect answers
+        # (Youden's J = -0.098 at 1B, +0.092 at 3B), so the revisions it triggers
+        # are close to random edits applied to already-correct answers. On 25
+        # GSM8K tasks it won 0 and lost 4 against an otherwise identical chain,
+        # taking accuracy from 0.640 to 0.480 while raising median latency from
+        # 16.5s to 72.8s. See docs/phase9/.
+        # It remains implemented and is still used by the cascade configuration,
+        # where rejections drive escalation rather than revision.
+        active_agents = ["Planner", "Executor"]
 
     if needs_retrieval:
         active_agents.append("Retriever")

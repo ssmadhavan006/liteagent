@@ -32,6 +32,7 @@ CONFIGS = (
     "static_full",
     "routellm_heuristic",
     "flat_cache",
+    "flat_cache_medium",
 )
 
 
@@ -65,6 +66,7 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
         build_cache_only_runner,
         build_cascade_runner,
         build_fixed_tier_runner,
+        build_flat_cache_runner,
         build_routing_only_runner,
     )
 
@@ -83,6 +85,8 @@ def build_runner(config: str, log_dir: str, ssd_dir: str, router_config: str,
         return build_routing_only_runner(**common)
     if config == "cache_only":
         return build_cache_only_runner(**common)
+    if config == "flat_cache_medium":
+        return build_flat_cache_runner("Medium", **common)
     if config.startswith("always_"):
         return build_fixed_tier_runner(config.split("_", 1)[1].capitalize(), **common)
 
@@ -147,7 +151,7 @@ def run_one(config: str, dataset: str, args, workstation_client) -> dict:
                 dataset_index=item.get("dataset_index", index),
                 runner=runner,
                 task_item=item,
-                max_tokens=args.max_tokens,
+                max_tokens=args.max_tokens or None,
             )
             if res.get("skipped"):
                 stats["skipped"] += 1
@@ -182,7 +186,8 @@ def main():
     p.add_argument("--log-dir", default="experiments")
     p.add_argument("--ssd-root", default="experiments/phase8_ssd")
     p.add_argument("--router-config", default="config/router_config.yaml")
-    p.add_argument("--max-tokens", type=int, default=256)
+    p.add_argument("--max-tokens", type=int, default=0,
+                   help="0 uses the per-benchmark budget from the harness")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--limit", type=int, default=0, help="Cap tasks per dataset (0 = all)")
     p.add_argument("--zero-shot", action="store_true",

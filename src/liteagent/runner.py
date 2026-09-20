@@ -62,6 +62,29 @@ def build_routing_only_runner(**kwargs) -> LiteAgentRunner:
     return runner
 
 
+def build_flat_cache_runner(tier: str = "Medium", slots: int = 2, **kwargs) -> LiteAgentRunner:
+    """
+    Fixed tier with a single-tier in-memory cache instead of the hierarchy.
+
+    This is the comparator H2 is literally stated against. Holding the tier, the
+    agent chain and the protocol fixed leaves the cache design as the only
+    variable, so any TTFT difference is attributable to tiering rather than to
+    running a different system.
+    """
+    from liteagent.baselines.vllm_prefix_cache_approx import VLLMPrefixCacheApprox
+
+    runner = LiteAgentRunner(baseline_name=f"flat_cache_{tier.lower()}", **kwargs)
+    runner.cache_manager = VLLMPrefixCacheApprox(
+        max_in_memory_slots=slots, log_dir=kwargs.get("log_dir", "experiments")
+    )
+    runner.dispatcher.edge_cache_manager = runner.cache_manager
+    runner.dispatcher.routing_disabled = True
+    runner.dispatcher.cache_disabled = False
+    runner.orchestrator.force_tier = tier
+    runner.orchestrator.force_agents = ["Planner", "Retriever", "Executor", "Critic"]
+    return runner
+
+
 def build_fixed_tier_runner(tier: str, **kwargs) -> LiteAgentRunner:
     """
     Pins every task to one tier, with the full agent chain and caching active.
