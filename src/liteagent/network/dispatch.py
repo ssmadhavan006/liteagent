@@ -278,6 +278,12 @@ class TaskDispatcher:
 
                     prefill_latency_ms = (time.time() - prefill_start) * 1000.0
 
+                    # Evaluating the suffix advanced the context past the cached
+                    # prefix. Without this the next task would be served HOT and
+                    # silently continue from this task's context.
+                    if not self.cache_disabled:
+                        self.edge_cache_manager.mark_context_dirty()
+
                     gen_start = time.time()
                     timings = {}
                     response_tokens, response_text = InferenceEngine.generate_tokens(

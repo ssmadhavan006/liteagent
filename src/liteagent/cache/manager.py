@@ -17,6 +17,13 @@ class KVCacheManager:
 
         self.storage = StorageManager(ssd_dir)
         self.hot_state = None
+        # The HOT path returns without deserialising, on the assumption that the
+        # model still holds that exact context. Generation invalidates that
+        # assumption: the context has advanced by the generated tokens. Serving
+        # HOT afterwards silently continues from a polluted context and produces
+        # different output, which the Exp 2 losslessness check detects. Callers
+        # mark the context dirty once they mutate it.
+        self._hot_dirty = False
         self.metadata_store = {}  # Dict[key, CacheStateMetadata]
         self._lock = threading.RLock()
 
@@ -65,8 +72,10 @@ class KVCacheManager:
                     })
                     return "MISS"
 
-            # 1. Tier 1 (Hot) Check
-            if self.hot_state == session_key:
+            # 1. Tier 1 (Hot) Check. Only valid while the in-memory context is
+            # still byte-identical to what was saved; otherwise fall through to
+            # Standby, which performs a real restore.
+            if self.hot_state == session_key and not self._hot_dirty:
                 if session_key in self.metadata_store:
                     self.metadata_store[session_key].last_accessed = time.time()
                 self._write_log({
@@ -84,6 +93,7 @@ class KVCacheManager:
                     state_bytes = self.storage.load_from_standby(session_key)
                     load_ms = deserialize_llama_state(llama_instance, state_bytes)
                     self.hot_state = session_key
+                    self._hot_dirty = False
                     if session_key in self.metadata_store:
                         self.metadata_store[session_key].last_accessed = time.time()
 
@@ -122,6 +132,7 @@ class KVCacheManager:
 
                     load_ms = deserialize_llama_state(llama_instance, state_bytes)
                     self.hot_state = session_key
+                    self._hot_dirty = False
 
                     # Restore metadata object in coordinator
                     meta = CacheStateMetadata.from_dict(meta_dict)
@@ -187,6 +198,7 @@ class KVCacheManager:
             # Save to memory cache
             self.promote_to_standby(session_key, state_bytes, meta)
             self.hot_state = session_key
+            self._hot_dirty = False
 
             self._write_log({
                 "event": "SAVE",
@@ -196,6 +208,17 @@ class KVCacheManager:
                 "save_state_ms": round(save_ms, 2),
                 "state_size_bytes": len(state_bytes)
             })
+
+    def mark_context_dirty(self):
+        """
+        Declares that the model's context no longer matches the saved HOT state.
+
+        Call this after generating, or after evaluating tokens on top of a
+        restored context. Without it the next HOT hit resumes from the advanced
+        context instead of the cached one.
+        """
+        with self._lock:
+            self._hot_dirty = True
 
     def promote_to_standby(self, session_key: str, state_bytes: bytes, metadata: CacheStateMetadata):
         """

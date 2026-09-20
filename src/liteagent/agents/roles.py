@@ -165,7 +165,13 @@ class ExecutorAgent(Agent):
         plan = bb.content_of(PLAN)
         if plan:
             sections.append(f"Plan:\n{plan}")
-        sections.append(f"Task:\n{bb.prompt}")
+        # Match the few-shot exemplar framing when one is present. The exemplars
+        # are written as "Question: ... / Answer: ...", so asking with a
+        # different label breaks the pattern the model was just shown.
+        if bb.shared_prefix and bb.benchmark != "humaneval":
+            sections.append(f"Question: {bb.prompt}")
+        else:
+            sections.append(f"Task:\n{bb.prompt}")
 
         critique = bb.latest(CRITIQUE)
         if self.include_feedback and critique is not None and not critique.metadata.get("approved", True):
@@ -175,6 +181,10 @@ class ExecutorAgent(Agent):
                 f"Reviewer feedback:\n{critique.content}\n\nProduce a corrected answer."
             )
 
+        # A bare "Answer:" continues the exemplar pattern directly; the extra
+        # blank line only applies to the unprefixed framing.
+        if bb.shared_prefix and bb.benchmark != "humaneval":
+            return "\n\n".join(sections) + "\nAnswer:"
         return "\n\n".join(sections) + "\n\nAnswer:"
 
     def consume(self, raw: str, bb: Blackboard) -> None:
