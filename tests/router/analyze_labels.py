@@ -26,6 +26,28 @@ def load_labels(path: str) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def strip_protocol_prefix(prompt: str, benchmark: str) -> str:
+    """
+    Recovers the bare task text from a stored prompt.
+
+    Stored prompts include the output contract and few-shot exemplars, which are
+    byte-identical across every task in a benchmark. Routing on them would make
+    all prompts look the same length and destroy the router's dominant feature,
+    so the constant prefix is removed before scoring.
+    """
+    from liteagent.eval.fewshot import build_prefix
+    from liteagent.eval.harness import BENCHMARK_SYSTEM_PROMPTS
+
+    system = BENCHMARK_SYSTEM_PROMPTS.get(benchmark, "")
+    prefix = build_prefix(benchmark)
+    body = prompt
+    if system and body.startswith(system):
+        body = body[len(system):].lstrip("\n")
+    if prefix and body.startswith(prefix):
+        body = body[len(prefix):]
+    return body
+
+
 def fit_length_thresholds(records: list[dict]) -> tuple[int, int]:
     """Best two-threshold length classifier, fit on the given records."""
     best = (-1, (60, 190))
@@ -54,7 +76,8 @@ def main():
 
     raw = load_labels(LABELS_PATH)
     records = [
-        {"prompt": r["prompt"], "tier": r["capability_tier"],
+        {"prompt": strip_protocol_prefix(r["prompt"], r["benchmark"]),
+         "tier": r["capability_tier"],
          "benchmark": r["benchmark"], "external": r.get("external_difficulty")}
         for r in raw if r["capability_tier"] != "Unsolved"
     ]
