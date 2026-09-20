@@ -84,10 +84,27 @@ class InferenceEngine:
         return int(_rng.choice(valid_indices, p=valid_probs))
 
     @staticmethod
-    def generate_tokens(llama_instance, max_tokens: int, temperature: float = 0.0) -> tuple[list[int], str]:
+    def generate_tokens(
+        llama_instance,
+        max_tokens: int,
+        temperature: float = 0.0,
+        timings: dict = None,
+    ) -> tuple[list[int], str]:
+        """
+        Greedy/sampled decode loop.
+
+        `timings`, when supplied, receives `ttft_ms` - the interval from entering
+        this call to the first token being produced. Time-to-first-token is the
+        metric the cache hypothesis (H2) is stated in, since restoring a context
+        replaces prefill rather than generation.
+        """
+        import time as _time
+        start = _time.perf_counter()
         response_tokens = []
         for _ in range(max_tokens):
             next_token = InferenceEngine.sample_next_token(llama_instance, temperature=temperature)
+            if timings is not None and not response_tokens:
+                timings["ttft_ms"] = (_time.perf_counter() - start) * 1000.0
             if next_token == llama_instance.token_eos():
                 break
             response_tokens.append(next_token)

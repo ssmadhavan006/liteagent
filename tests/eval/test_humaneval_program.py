@@ -66,6 +66,32 @@ def test_end_to_end_completion_scores_one():
     assert res["pass_status"] == 1.0, res["stderr"]
 
 
+def test_assertions_actually_execute():
+    """
+    HumanEval's `test` field only defines check(candidate); calling it is the
+    harness's job. Without the call the assertions never run, the script exits
+    0, and every syntactically valid program scores as correct.
+    """
+    from liteagent.eval.metrics.humaneval_metric import build_test_harness
+
+    test_code = "def check(candidate):\n    assert candidate([1]) == [2]\n"
+    assert "check(add_one)" in build_test_harness(test_code, "add_one")
+    # An existing call must not be duplicated.
+    already = test_code + "\ncheck(add_one)\n"
+    assert build_test_harness(already, "add_one").count("check(add_one)") == 1
+
+
+def test_program_that_compiles_but_is_wrong_does_not_pass():
+    """The regression that made every HumanEval task score 1.0."""
+    res = score_humaneval(
+        "    return []",  # compiles, runs, and is wrong
+        "def check(candidate):\n    assert candidate([1, 2]) == [2, 3]\n",
+        prompt=PROMPT,
+        entry_point="add_one",
+    )
+    assert res["pass_status"] == 0.0, "a compiling but incorrect program must fail"
+
+
 def test_wrong_completion_scores_zero():
     res = score_humaneval(
         "    return [x - 1 for x in xs]",
@@ -87,9 +113,13 @@ def test_reference_solutions_all_pass():
     if not os.path.exists(path):
         pytest.skip("humaneval subset unavailable")
 
+    from liteagent.eval.sandbox import UNSCOREABLE_TASKS
+
     items = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()][:15]
     failures = []
     for item in items:
+        if item["entry_point"] in UNSCOREABLE_TASKS:
+            continue
         res = score_humaneval(
             item["canonical_solution"], item["test"],
             prompt=item["prompt"], entry_point=item["entry_point"],

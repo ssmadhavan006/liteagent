@@ -170,7 +170,8 @@ class TaskDispatcher:
         prompt_hash: str,
         fallback_occurred: bool = False,
         timeout: float = 120.0,
-        agent_role: str = None
+        agent_role: str = None,
+        cache_prefix: str = None
     ) -> dict:
         self.log_event(request_id, "DISPATCH_STARTED", {"execution_location": "local"})
         if agent_role is None:
@@ -195,17 +196,37 @@ class TaskDispatcher:
             llama = self.local_models[model_tag]
             lock = self.model_locks[model_tag]
 
+        # Split the prompt into a reusable prefix and the task-specific suffix.
+        #
+        # Keying the cache on a hash of the *whole* prompt made every lookup a
+        # guaranteed miss: each benchmark task has a distinct prompt, so the
+        # three-tier hierarchy never served a single restore (2 hits against 112
+        # misses across the project's history, none from Standby or Cold). The
+        # reusable part is the output contract plus few-shot exemplars, which are
+        # byte-identical for every task in a benchmark, so that is what is cached.
+        full_text = f"{system_prompt}\n{task['prompt']}"
+        prefix_text = cache_prefix if cache_prefix and full_text.startswith(cache_prefix) else ""
+        suffix_text = full_text[len(prefix_text):]
+
+        use_prefix_cache = bool(prefix_text) and not self.cache_disabled
+        if use_prefix_cache:
+            prefix_hash = hashlib.sha256(prefix_text.encode("utf-8")).hexdigest()
+            prefix_key = f"prefix::{model_tag}::{prefix_hash[:16]}"
+        else:
+            prefix_hash = prompt_hash
+            prefix_key = session_id
+
         lock.acquire()
         try:
             if self.cache_disabled:
                 cache_hit_tier = "MISS"
             else:
                 cache_hit_tier = self.edge_cache_manager.load_cache(
-                    session_key=session_id,
+                    session_key=prefix_key,
                     llama_instance=llama,
                     model_tag=model_tag,
                     ctx_size=4096,
-                    prompt_hash=prompt_hash
+                    prompt_hash=prefix_hash
                 )
 
             self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
@@ -217,30 +238,63 @@ class TaskDispatcher:
             def run_inference():
                 try:
                     prefill_start = time.time()
+                    saved_prefix = False
                     if cache_hit_tier == "MISS":
                         llama.reset()
-                        full_prompt = f"{system_prompt}\n{task['prompt']}".encode("utf-8")
-                        tokens = llama.tokenize(full_prompt)
-                        llama.eval(tokens)
-                        prefill_tokens = len(tokens)
+                        if use_prefix_cache:
+                            # Evaluate the prefix alone, snapshot it, then continue
+                            # with the suffix. The snapshot is what later tasks reuse.
+                            prefix_tokens = llama.tokenize(prefix_text.encode("utf-8"))
+                            llama.eval(prefix_tokens)
+                            self.edge_cache_manager.save_cache(
+                                session_key=prefix_key,
+                                agent_role=agent_role,
+                                llama_instance=llama,
+                                model_tag=model_tag,
+                                ctx_size=4096,
+                                prompt_hash=prefix_hash,
+                            )
+                            saved_prefix = True
+                            suffix_tokens = llama.tokenize(
+                                suffix_text.encode("utf-8"), add_bos=False
+                            )
+                            llama.eval(suffix_tokens)
+                            prefill_tokens = len(prefix_tokens) + len(suffix_tokens)
+                            cached_tokens = 0
+                        else:
+                            tokens = llama.tokenize(full_text.encode("utf-8"))
+                            llama.eval(tokens)
+                            prefill_tokens = len(tokens)
+                            cached_tokens = 0
                     else:
-                        tokens = llama.tokenize(task['prompt'].encode("utf-8"))
-                        llama.eval(tokens)
-                        prefill_tokens = len(tokens)
+                        # Prefix already resident: only the suffix needs evaluating.
+                        suffix_tokens = llama.tokenize(
+                            suffix_text.encode("utf-8"), add_bos=False
+                        )
+                        llama.eval(suffix_tokens)
+                        prefill_tokens = len(suffix_tokens)
+                        cached_tokens = len(llama.tokenize(prefix_text.encode("utf-8"))) \
+                            if prefix_text else 0
 
                     prefill_latency_ms = (time.time() - prefill_start) * 1000.0
 
                     gen_start = time.time()
+                    timings = {}
                     response_tokens, response_text = InferenceEngine.generate_tokens(
-                        llama, max_tokens, temperature=temperature
+                        llama, max_tokens, temperature=temperature, timings=timings
                     )
                     generation_latency_ms = (time.time() - gen_start) * 1000.0
 
                     result_container["prefill_tokens"] = prefill_tokens
+                    result_container["cached_prefix_tokens"] = cached_tokens
                     result_container["prefill_latency_ms"] = prefill_latency_ms
                     result_container["generation_latency_ms"] = generation_latency_ms
+                    # TTFT spans restoration plus prefill plus the first decode,
+                    # which is the quantity a context cache is meant to reduce.
+                    result_container["ttft_ms"] = prefill_latency_ms + timings.get("ttft_ms", 0.0)
                     result_container["response_tokens"] = response_tokens
                     result_container["response_text"] = response_text
+                    result_container["prefix_saved"] = saved_prefix
                 except Exception as ex:
                     exception_container.append(ex)
 
@@ -261,17 +315,24 @@ class TaskDispatcher:
 
             self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
 
-            # Save cache locally
             if not self.cache_disabled:
-                self.edge_cache_manager.save_cache(
-                    session_key=session_id,
-                    agent_role=agent_role,
-                    llama_instance=llama,
-                    model_tag=model_tag,
-                    ctx_size=4096,
-                    prompt_hash=prompt_hash
-                )
-                self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
+                if use_prefix_cache:
+                    # The prefix snapshot is written before the suffix is
+                    # evaluated; re-saving here would overwrite it with a
+                    # task-specific state that no later task can reuse.
+                    if result_container.get("prefix_saved"):
+                        self.log_event(request_id, "CACHE_UPDATED",
+                                       {"location": "local", "scope": "prefix"})
+                else:
+                    self.edge_cache_manager.save_cache(
+                        session_key=session_id,
+                        agent_role=agent_role,
+                        llama_instance=llama,
+                        model_tag=model_tag,
+                        ctx_size=4096,
+                        prompt_hash=prompt_hash
+                    )
+                    self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
 
             outcome = "FALLBACK_SUCCESS" if fallback_occurred else "SUCCESS"
             self.log_event(request_id, "COMPLETED", {"outcome": outcome})
@@ -280,8 +341,10 @@ class TaskDispatcher:
                 "response_text": response_text,
                 "tokens_generated": len(response_tokens),
                 "prefill_tokens": prefill_tokens,
+                "cached_prefix_tokens": result_container.get("cached_prefix_tokens", 0),
                 "prefill_latency_ms": round(prefill_latency_ms, 2),
                 "generation_latency_ms": round(generation_latency_ms, 2),
+                "ttft_ms": round(result_container.get("ttft_ms", 0.0), 2),
                 "cache_hit_tier": cache_hit_tier,
                 "routed_tier": route.get("model_tier", tier),
                 "executed_tier": tier,
@@ -301,7 +364,8 @@ class TaskDispatcher:
         tier: str,
         request_id: str = None,
         temperature: float = 0.0,
-        max_tokens: int = 128
+        max_tokens: int = 128,
+        cache_prefix: str = None
     ) -> dict:
         """
         Executes one agent turn at an already-chosen tier.
@@ -335,14 +399,14 @@ class TaskDispatcher:
             return self._execute_local(
                 step_task, session_key, system_prompt, temperature, max_tokens,
                 request_id, route, "Medium", prompt_hash,
-                fallback_occurred=True, agent_role=agent_role
+                fallback_occurred=True, agent_role=agent_role, cache_prefix=cache_prefix
             )
 
         exec_tier = tier if tier in ("Small", "Medium") else "Medium"
         return self._execute_local(
             step_task, session_key, system_prompt, temperature, max_tokens,
             request_id, route, exec_tier, prompt_hash,
-            fallback_occurred=False, agent_role=agent_role
+            fallback_occurred=False, agent_role=agent_role, cache_prefix=cache_prefix
         )
 
     def execute_task(
@@ -351,7 +415,8 @@ class TaskDispatcher:
         session_id: str,
         system_prompt: str,
         temperature: float = 0.0,
-        max_tokens: int = 100
+        max_tokens: int = 100,
+        cache_prefix: str = None
     ) -> dict:
         request_id = str(uuid.uuid4())
 
@@ -389,11 +454,13 @@ class TaskDispatcher:
             logger.warning("Fallback triggered: degrading dispatch to local Medium execution. Reason: %s", err_reason)
             tier = "Medium"
             return self._execute_local(
-                task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash, fallback_occurred=True
+                task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash,
+                fallback_occurred=True, cache_prefix=cache_prefix
             )
 
         # 3. Local execution branch
         return self._execute_local(
-            task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash, fallback_occurred=False
+            task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash,
+            fallback_occurred=False, cache_prefix=cache_prefix
         )
 

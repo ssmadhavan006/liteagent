@@ -160,6 +160,9 @@ class EvaluationHarness:
         # The few-shot prefix is applied here, once, so every configuration
         # receives a byte-identical prompt for the same task.
         prefix = build_prefix(dataset, self.few_shot)
+        # Also handed over unconcatenated: the agent chain keeps it separate so
+        # it can be cached once per model and restored rather than re-prefilled.
+        task_context["few_shot_prefix"] = prefix
         if prefix:
             prompt = prefix + prompt
             # The agent chain reads `question` instead of the pre-inlined
@@ -200,6 +203,8 @@ class EvaluationHarness:
             model_calls = res.get("model_calls", 1)
             revisions = res.get("revisions", 0)
             escalations = res.get("escalations", 0)
+            ttft_ms = res.get("ttft_ms", 0.0)
+            cached_prefix_tokens = res.get("cached_prefix_tokens", 0)
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000.0
@@ -290,6 +295,8 @@ class EvaluationHarness:
             "quality_score": quality_score,
             "quality_score_extra": quality_extra,
             "latency_ms": latency_ms,
+            "ttft_ms": ttft_ms,
+            "cached_prefix_tokens": cached_prefix_tokens,
             # None (not 0.0) when no backend could measure this run, so an
             # unmeasured task cannot be averaged in as a real zero.
             "energy_joules": energy_joules,

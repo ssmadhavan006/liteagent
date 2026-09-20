@@ -29,6 +29,24 @@
 - [ ] Phase 10 — Paper Writing
 - [ ] Phase 11 — Review & Submission
 
+### 2026-09-20 (later still) — The KV Cache Had Never Served A Restore
+- **What was done:** Found that the three-tier cache was mechanically inert, and changed the cache key so it fires.
+- **The defect:** Lifetime cache statistics across the whole project were **112 `LOAD_MISS` against 2 `LOAD_HIT`**, both HOT — **zero restores from Standby (RAM) or Cold (SSD)**, despite 35 evictions to cold storage. Nothing was ever read back.
+- **Root cause, structural rather than a bug:** entries were keyed on `sha256(full_prompt)` under a session key unique per task (`session_{task_id}_{baseline}`). Every benchmark task has a distinct prompt, so every lookup was a guaranteed miss. The hierarchy could not hit on a benchmark sweep by construction. Underlying this was a design mismatch: a KV cache pays off when a turn *extends* an existing context, but each agent built a fresh independent prompt.
+- **The fix — prefix caching.** The reusable span is the output contract plus the few-shot exemplars, which are byte-identical for every task in a benchmark. That span is now evaluated once, snapshotted, and restored for subsequent tasks, after which only the task-specific suffix is prefilled. Agents emit the shared prefix first (`Agent.build_prompt` wraps a role-specific `_body`) so the evaluated text starts with it verbatim.
+- **Measured effect** (GSM8K, `llama3.2:1b`, 6 tasks, Executor only):
+
+  | | Prefill tokens | TTFT |
+  | :--- | :---: | :---: |
+  | Cold (first task, MISS) | 482 | 2344 ms |
+  | Warm (subsequent, HOT) | 57–105 | 273–564 ms |
+
+  424 of ~480 prefix tokens restored rather than recomputed; **TTFT falls roughly 6x**. This is the first evidence that H2's mechanism does anything at all.
+- **Also implemented TTFT (R10).** `system_contract.md` §3.2 defines Time to First Token as a headline metric and nothing measured it. `InferenceEngine.generate_tokens` now accepts a `timings` dict and reports `ttft_ms`; the dispatcher adds restoration plus prefill, and the value is recorded per agent turn and per task.
+- **Files touched:** `src/liteagent/network/dispatch.py`, `src/liteagent/agents/{orchestrator,roles,messages}.py`, `src/liteagent/eval/harness.py`, `src/liteagent/utils/inference.py`, `tests/agents/test_chain.py`.
+- **Caveat:** this measures prefix reuse across tasks on one model. It does **not** yet demonstrate the Standby or Cold tiers, which only engage under memory pressure with more concurrent contexts than `max_ram_states`. Exp 2 must force that pressure explicitly rather than assume it.
+- **Verification:** 113 tests pass.
+
 ### 2026-09-20 (later) — HumanEval Scoring Was Returning Zero For Every Task
 - **What was done:** Found and fixed two independent defects that made the HumanEval metric score 0.0 for every input, including the dataset's own reference solutions. Verified by scoring all 80 canonical solutions in the subset: **0/80 before, 80/80 after.**
 - **Defect 1 — the sandbox rejected valid code.** `SANDBOX_GUARD_TEMPLATE` installed the restrictive import hook *before* any permitted module was loaded, and popped `io`, `importlib` and `sys` from `sys.modules`. Loading a permitted module pulls in transitive dependencies (`enum`, `abc`, `sre_compile`, …) that are not on the allowlist, so `from typing import List` — which opens a large share of HumanEval problems — raised `PermissionError`. Fixed by pre-importing every permitted module while the import system still works, then installing the hook and dropping capability-bearing modules.

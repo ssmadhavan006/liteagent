@@ -20,7 +20,7 @@ class RecordingDispatcher:
 
     def execute_agent_step(self, task_id, prompt, system_prompt, agent_role,
                            session_key, tier, request_id=None,
-                           temperature=0.0, max_tokens=128):
+                           temperature=0.0, max_tokens=128, cache_prefix=None):
         self.calls.append({
             "agent_role": agent_role,
             "session_key": session_key,
@@ -28,6 +28,7 @@ class RecordingDispatcher:
             "prompt": prompt,
             "system_prompt": system_prompt,
             "max_tokens": max_tokens,
+            "cache_prefix": cache_prefix,
         })
         default = {"Planner": "1. Understand\n2. Compute\n3. Check",
                    "Retriever": "",

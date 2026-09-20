@@ -15,7 +15,15 @@ SAFE_MODULES = {
     "math", "typing", "collections", "re", "string", "datetime",
     "itertools", "functools", "heapq", "array", "bisect",
     "copy", "operator", "fractions", "decimal", "statistics", "enum",
+    # Several HumanEval test suites generate cases with `random`.
+    "random",
 }
+
+# Tasks whose reference solution cannot run under this sandbox policy. HumanEval's
+# `do_algebra` evaluates a constructed expression with `eval()`, which is blocked
+# deliberately. Such tasks are unscoreable here and must be excluded from reported
+# pass@1 rather than counted as failures.
+UNSCOREABLE_TASKS = {"do_algebra"}
 
 SANDBOX_GUARD_TEMPLATE = """# Layered Sandbox Guard
 import builtins

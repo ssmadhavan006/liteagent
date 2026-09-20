@@ -60,13 +60,22 @@ class AgentOrchestrator:
         # When documents are supplied the Retriever provides the evidence, so the
         # chain works from the bare question rather than the pre-inlined context.
         prompt = context.get("question") if normalised else None
+        prompt = prompt or task.get("prompt", "")
+
+        # The harness hands the prompt over with the few-shot prefix already
+        # attached. Split it back out so each agent can emit it first and the
+        # cache has a span that repeats across tasks.
+        shared_prefix = context.get("few_shot_prefix", "") or ""
+        if shared_prefix and prompt.startswith(shared_prefix):
+            prompt = prompt[len(shared_prefix):]
 
         return Blackboard(
             task_id=str(task.get("id", "task")),
             benchmark=task.get("benchmark", ""),
-            prompt=prompt or task.get("prompt", ""),
+            prompt=prompt,
             documents=normalised,
             entry_point=context.get("entry_point"),
+            shared_prefix=shared_prefix,
         )
 
     def execute_task(
@@ -108,11 +117,17 @@ class AgentOrchestrator:
 
             step_tokens = min(agent.max_tokens, max_tokens) if agent.role == "Executor" else agent.max_tokens
             step_start = time.time()
+            # Reusable across every task for this role: the role's system prompt
+            # plus the benchmark's few-shot exemplars. Caching this prefix is what
+            # gives the KV hierarchy something to restore.
+            agent_system = agent.system_prompt(bb)
+            reusable_prefix = f"{agent_system}\n{bb.shared_prefix}" if bb.shared_prefix else None
             try:
                 res = self.dispatcher.execute_agent_step(
                     task_id=bb.task_id,
                     prompt=agent.build_prompt(bb),
-                    system_prompt=agent.system_prompt(bb),
+                    system_prompt=agent_system,
+                    cache_prefix=reusable_prefix,
                     agent_role=agent.role,
                     # Tier is part of the key: KV state is model-specific, so an
                     # escalated step must not collide with the smaller model's
@@ -143,12 +158,18 @@ class AgentOrchestrator:
             totals["model_calls"] += 1
             cache_tiers.append(res.get("cache_hit_tier", "NONE"))
 
+            totals.setdefault("ttft_ms", []).append(res.get("ttft_ms", 0.0))
+            totals["cached_prefix_tokens"] = totals.get("cached_prefix_tokens", 0) + \
+                res.get("cached_prefix_tokens", 0)
+
             trace.append({
                 "agent": agent.role,
                 "model_tier": res.get("executed_tier", tier),
                 "revision_pass": revision_pass,
                 "latency_ms": round((time.time() - step_start) * 1000.0, 2),
+                "ttft_ms": round(res.get("ttft_ms", 0.0), 2),
                 "prefill_tokens": res.get("prefill_tokens", 0),
+                "cached_prefix_tokens": res.get("cached_prefix_tokens", 0),
                 "tokens_generated": res.get("tokens_generated", 0),
                 "cache_hit_tier": res.get("cache_hit_tier", "NONE"),
                 "fallback_occurred": res.get("fallback_occurred", False),
@@ -206,6 +227,10 @@ class AgentOrchestrator:
             "latency_ms": round((time.time() - chain_start) * 1000.0, 2),
             "cache_hit_tier": cache_tiers[0] if cache_tiers else "NONE",
             "cache_hit_tiers": cache_tiers,
+            # TTFT of the task is the first turn's: that is when the user would
+            # see output, and it is the span a restored context shortens.
+            "ttft_ms": round(totals.get("ttft_ms", [0.0])[0], 2) if totals.get("ttft_ms") else 0.0,
+            "cached_prefix_tokens": totals.get("cached_prefix_tokens", 0),
             "routed_tier": route.get("model_tier", tier),
             "executed_tier": tier,
             "fallback_occurred": any(t.get("fallback_occurred") for t in trace),

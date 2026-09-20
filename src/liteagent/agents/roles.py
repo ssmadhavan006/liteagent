@@ -19,6 +19,16 @@ class Agent:
         raise NotImplementedError
 
     def build_prompt(self, bb: Blackboard) -> str:
+        """
+        Full prompt for this turn.
+
+        The shared few-shot prefix is emitted first so the evaluated text starts
+        with it verbatim; the KV cache can then restore that span instead of
+        re-prefilling it. Roles override `_body`, not this.
+        """
+        return f"{bb.shared_prefix}{self._body(bb)}"
+
+    def _body(self, bb: Blackboard) -> str:
         raise NotImplementedError
 
     def consume(self, raw: str, bb: Blackboard) -> None:
@@ -38,7 +48,7 @@ class PlannerAgent(Agent):
             "Write one step per line, numbered. Do not solve the task."
         )
 
-    def build_prompt(self, bb: Blackboard) -> str:
+    def _body(self, bb: Blackboard) -> str:
         return f"Task:\n{bb.prompt}\n\nSteps:"
 
     def consume(self, raw: str, bb: Blackboard) -> None:
@@ -76,7 +86,7 @@ class RetrieverAgent(Agent):
             "Reply with only their titles, one per line. Do not answer the question."
         )
 
-    def build_prompt(self, bb: Blackboard) -> str:
+    def _body(self, bb: Blackboard) -> str:
         titles = "\n".join(f"- {title}" for title, _ in bb.documents)
         plan = bb.content_of(PLAN)
         plan_block = f"\nPlan:\n{plan}\n" if plan else ""
@@ -147,7 +157,7 @@ class ExecutorAgent(Agent):
             "Reply with the shortest exact answer span, no explanation."
         )
 
-    def build_prompt(self, bb: Blackboard) -> str:
+    def _body(self, bb: Blackboard) -> str:
         sections = []
         evidence = bb.content_of(EVIDENCE)
         if evidence:
@@ -183,7 +193,7 @@ class CriticAgent(Agent):
             "otherwise reply 'REVISE:' followed by one sentence saying what is wrong."
         )
 
-    def build_prompt(self, bb: Blackboard) -> str:
+    def _body(self, bb: Blackboard) -> str:
         return (
             f"Task:\n{bb.prompt}\n\n"
             f"Proposed answer:\n{bb.content_of(DRAFT)}\n\nVerdict:"

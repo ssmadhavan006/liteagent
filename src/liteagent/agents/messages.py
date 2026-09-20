@@ -49,10 +49,14 @@ class Blackboard:
         prompt: str,
         documents: list[tuple[str, str]] | None = None,
         entry_point: str | None = None,
+        shared_prefix: str = "",
     ):
         self.task_id = task_id
         self.benchmark = (benchmark or "").lower()
         self.prompt = prompt
+        # Text identical across every task of this benchmark (the few-shot
+        # exemplars). Cached once per model and restored instead of re-prefilled.
+        self.shared_prefix = shared_prefix
         self.documents = documents or []
         self.entry_point = entry_point
         self.messages: list[AgentMessage] = []

@@ -67,6 +67,26 @@ def build_program(prediction: str, prompt: str = "", entry_point: str = "") -> s
     return prompt + code
 
 
+def build_test_harness(test_code: str, entry_point: str) -> str:
+    """
+    Appends the call that actually runs the assertions.
+
+    HumanEval's `test` field only *defines* `check(candidate)`; invoking it is
+    the harness's job. Without the call the assertions never execute, the script
+    exits 0, and every syntactically valid program scores as correct - which is
+    what this project was doing for every HumanEval task.
+    """
+    if not entry_point:
+        return test_code
+    # Only meaningful when the suite defines check(); bare-assertion suites run
+    # as-is and appending a call would raise NameError.
+    if not re.search(r"^\s*def\s+check\s*\(", test_code, re.MULTILINE):
+        return test_code
+    if re.search(r"^\s*check\s*\(", test_code, re.MULTILINE):
+        return test_code
+    return f"{test_code}\n\ncheck({entry_point})\n"
+
+
 def score_humaneval(
     prediction: str,
     test_code: str,
@@ -79,7 +99,7 @@ def score_humaneval(
     Returns score (1.0 for success, 0.0 for failure) and sandbox diagnostic metrics.
     """
     program = build_program(prediction, prompt=prompt, entry_point=entry_point)
-    res = run_sandboxed_code(program, test_code, timeout=timeout)
+    res = run_sandboxed_code(program, build_test_harness(test_code, entry_point), timeout=timeout)
     score = 1.0 if res["success"] else 0.0
     return {
         "pass_status": score,
