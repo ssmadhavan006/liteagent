@@ -185,10 +185,83 @@ cascade is viable. Measuring Critic sensitivity/specificity against the
 capability labels is the next experiment, and the cascade must not be claimed to
 work until that number exists.
 
+## 8. H1b — the Critic is not a usable verifier (measured)
+
+The cascade's viability rests entirely on the Critic's ability to tell a correct
+answer from a wrong one. That was measured directly: the entry tier
+(`llama3.2:1b`) produced one answer for each of the 94 solvable tasks, ground
+truth came from the benchmark metric, and the Critic then judged that same fixed
+set of answers at two tiers.
+
+| Verifier | n | TP | FN | TN | FP | Sensitivity | Specificity | Youden's J |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Critic @ 1B | 94 | 33 | 26 | 12 | 23 | 0.559 | 0.343 | **−0.098** |
+| Critic @ 3B | 94 | 29 | 30 | 21 | 14 | 0.492 | 0.600 | **+0.092** |
+
+Youden's J (`sensitivity + specificity − 1`) is 0 for a coin flip. The 1B Critic
+scores **below** it; the 3B Critic is marginally above. The Critic's verdicts are
+very nearly independent of whether the answer is actually correct.
+
+Per benchmark, every cell but one is at or below chance:
+
+| Verifier | GSM8K | HumanEval | HotpotQA |
+| :--- | :---: | :---: | :---: |
+| @ 1B | J = −0.20 | J = −0.06 | J = −0.28 |
+| @ 3B | J = −0.02 | J = −0.01 | J = +0.25 |
+
+The 1B/HumanEval cell is instructive: sensitivity 0.85, specificity 0.09. It is
+not detecting wrong code — it is rejecting nearly everything, which scores well
+on sensitivity alone. Reporting sensitivity without specificity would have made
+that look like a success.
+
+### Consequence: the cascade is Pareto-dominated
+
+Substituting the measured verifier quality into the policy model:
+
+| Policy | Solved | Cost |
+| :--- | :---: | :---: |
+| **always-medium** | **81.9%** | **1607 s** |
+| cascade, measured Critic @ 3B | 55.9% | 2659 s |
+| cascade, measured Critic @ 1B | 42.8% | 3586 s |
+| always-large (`static_full`) | 100% | 3713 s |
+| cascade, perfect verifier (hypothetical) | 100% | 2893 s |
+
+With the Critic as built, the cascade is worse than a fixed mid-tier model on
+**both** axes — lower solve rate and higher cost. Low specificity escalates
+correct answers, so cost approaches always-large; low sensitivity lets wrong
+answers through, so the solve rate collapses.
+
+**H1b is refuted.** Verification-gated escalation cannot be claimed as a
+contribution with this verifier.
+
+## 9. Overall finding for H1
+
+Both available mechanisms for tier selection fail on this system:
+
+- **Prediction** (§3): 27.27% tier accuracy against a 45.45% constant predictor.
+- **Verification** (§8): Youden's J of −0.098 (1B) and +0.092 (3B).
+
+And a trivial policy dominates both: **always-medium solves 81.9% of solvable
+tasks at 43% of always-large's cost**, beating the full routed system on cost
+and the cascade on both axes.
+
+The honest statement of H1 is therefore negative: *for this model pool and task
+mix, no routing mechanism we implemented improves on fixed mid-tier selection.*
+That is a result worth reporting, but it is not the result the project set out
+to claim, and it should not be presented as one.
+
+Scope limits, as in §5: 94 labelled tasks, one answer sampled per task under
+greedy decoding, three specific models. A stronger verifier — self-consistency
+across samples, a trained classifier over hidden states, or an execution-based
+check for code — could change the conclusion, and none of those were tested.
+HumanEval is the obvious candidate, since correctness there is decidable by
+running the tests rather than by asking a model.
+
 Reproduce with:
 
 ```
 uv run python -m tests.router.calibrate_router
 uv run python -m tests.router.analyze_labels
 uv run python -m tests.router.cascade_analysis
+uv run python -m tests.router.measure_critic
 ```

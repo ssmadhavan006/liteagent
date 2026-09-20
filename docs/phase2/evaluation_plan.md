@@ -15,13 +15,17 @@ This document outlines the formal evaluation plan for LiteAgent, mapping core re
     > only reaches parity by ceasing to route. See
     > `docs/phase9/router_capability_analysis.md`.
     >
-    > H1 is therefore restated as a question about *observed* rather than
-    > *predicted* difficulty: **does verification-gated escalation reduce cost
-    > relative to always-large at comparable quality, and does it beat
-    > always-medium on the cost/quality frontier?** Analysis puts a
-    > perfect-verifier cascade 22% below always-large at equal quality, so the
-    > open variable is the Critic's sensitivity and specificity, which must be
-    > measured before any H1 claim is made.
+    > H1 was then restated as a question about *observed* rather than *predicted*
+    > difficulty, and that was measured too. **It also fails.** The Critic's
+    > Youden's J is −0.098 at 1B and +0.092 at 3B, so its verdicts are close to
+    > independent of whether an answer is correct. With the measured verifier,
+    > the cascade is Pareto-dominated by `always_medium` — lower solve rate
+    > (55.9% vs 81.9%) at higher cost (2659 s vs 1607 s).
+    >
+    > **Current status of H1: negative.** Neither prediction nor verification
+    > beats fixed mid-tier selection for this model pool. Exp 1 now measures that
+    > claim end to end rather than assuming routing helps; `always_medium` is the
+    > baseline any routing policy must beat.
 *   **H2 (KV Cache Performance)**: A persistent three-tier KV cache reduces context restoration latency compared with flat in-memory caching.
 *   **H3 (Co-Design Synergy)**: The combined routing + KV cache co-design provides greater overall system efficiency (e.g. latency vs. VRAM/RAM constraints) than either optimization implemented independently.
 *   **H4 (Edge Feasibility)**: LiteAgent enables practical multi-agent inference on Raspberry Pi-class hardware with acceptable quality degradation relative to pure workstation execution.
@@ -33,7 +37,7 @@ This document outlines the formal evaluation plan for LiteAgent, mapping core re
 | Hypothesis | Experiment ID | Target Baseline / Comparator | System Metrics | Task Quality Metrics | Experiment Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **H1** | Exp 1 (Cost/Quality Frontier) | `always_small`, `always_medium`, `always_large`, `cascade`, `routellm_heuristic` | End-to-end Latency, Energy per Token, model calls | GSM8K EM, HotpotQA F1, HumanEval Pass@1 | Place every policy on a cost/quality frontier. `always_medium` is the comparator to beat (81.9% of solvable tasks at 43% of always-large's cost on the labelled set), not `always_large`. |
-| **H1b** | Exp 1b (Verifier Quality) | Critic verdicts vs capability labels | — | Sensitivity, specificity of the Critic | Measure how reliably the Critic rejects wrong answers and accepts right ones. These two numbers bound the cascade's cost and solve rate respectively, and decide whether H1 can be supported at all. |
+| **H1b** | Exp 1b (Verifier Quality) — **DONE, refuted** | Critic verdicts vs capability labels | — | Sensitivity, specificity, Youden's J | Measured 2026-09-20: J = −0.098 (Critic @ 1B), +0.092 (Critic @ 3B). The Critic cannot discriminate correct from incorrect answers, so verification-gated escalation is not viable as built. See `docs/phase9/router_capability_analysis.md` §8. |
 | **H2** | Exp 2 (Cache Eviction) | Flat In-Memory Prefix Caching (vLLM approximation without RAM/SSD swapping) | TTFT, Context Restoration Latency, Peak VRAM | Cache Output Text Identity (Character-level Match) | Execute long multi-turn agent conversation chains. Benchmark time-to-first-token (TTFT) when loading from RAM/SSD compared to full prompt re-computation. Verify output losslessness by confirming character-by-character token identity between restored generation and fresh prefill generation. |
 | **H3** | Exp 3 (Co-Design Stress Test) | Routing-Only (no persistent cache) & Cache-Only (static routing) | Latency, Peak RAM/VRAM, Energy | GSM8K EM, HotpotQA F1, HumanEval Pass@1 | Disable routing and cache components independently during multi-agent workflows to measure co-design synergy under memory constraints. |
 | **H4** | Exp 4 (Edge Feasibility) | Native PC Workstation Inference (all tasks routed to PC) | End-to-end Latency, Peak VRAM, Energy | GSM8K EM, HotpotQA F1, HumanEval Pass@1 | Run full multi-agent benchmark on Raspberry Pi 5 with LiteAgent. Measure latency overhead, peak RAM footprint, and task quality relative to PC. |
