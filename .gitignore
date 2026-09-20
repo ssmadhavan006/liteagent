@@ -1,6 +1,10 @@
-# LiteAgent local rules and progress files (requested to keep local)
-rules.md
-progress.md
+# App state DB
+.freebuff/
+
+# Large dataset payloads (keep only subset.* tracked)
+data/**/test.*
+data/**/val_*.json
+data/**/train.*
 
 # Virtual environments
 .venv/
@@ -31,3 +35,6 @@ weights/
 
 # Run log directories
 experiments/
+
+# Knowledge-graph tooling output
+graphify-out/

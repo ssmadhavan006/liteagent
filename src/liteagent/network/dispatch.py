@@ -6,13 +6,18 @@ import json
 import datetime
 import hashlib
 import threading
-import numpy as np
+import random
+import logging
 from llama_cpp import Llama
 
+from liteagent.config import EDGE_N_GPU_LAYERS
 from liteagent.router.router import route_task
 from liteagent.cache import KVCacheManager
 from liteagent.network.client import WorkstationClient
 from liteagent.utils.model_resolver import resolve_model_path
+from liteagent.utils.inference import InferenceEngine
+
+logger = logging.getLogger("liteagent.network.dispatch")
 
 class TaskDispatcher:
     def __init__(
@@ -29,25 +34,31 @@ class TaskDispatcher:
         self.local_models = {}
         self.model_locks = {}
         self.locks_lock = threading.Lock()
-        
+
         self.routing_disabled = False
         self.cache_disabled = False
         self.baseline_name = "liteagent"
-        
-        # Load fallback policy from config
+
+        # Load fallback policy and workstation config
         self.fallback_policy = "retry_then_medium"
         self.max_retries = 1
-        
+
         if router_config_path and os.path.exists(router_config_path):
             try:
-                with open(router_config_path, "r") as f:
+                with open(router_config_path, "r", encoding="utf-8") as f:
                     config = yaml.safe_load(f)
                     net_config = config.get("network", {})
                     self.fallback_policy = net_config.get("fallback_policy", "retry_then_medium")
                     self.max_retries = net_config.get("max_retries", 1)
-            except Exception:
-                pass
-                
+
+                    # Auto-initialize workstation_client if host/port present in config
+                    if not self.workstation_client and "workstation_host" in net_config:
+                        host = net_config.get("workstation_host", "localhost")
+                        port = net_config.get("workstation_port", 50051)
+                        self.workstation_client = WorkstationClient(host=host, port=port)
+            except Exception as e:
+                logger.warning("Failed to load dispatcher configuration from %s: %s", router_config_path, e)
+
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
 
@@ -70,10 +81,269 @@ class TaskDispatcher:
         if extra:
             log_entry.update(extra)
         try:
-            with open(log_file, "a") as f:
+            with open(log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to append dispatch log: %s", e)
+
+    def _execute_remote_with_fallback(
+        self,
+        task: dict,
+        session_id: str,
+        system_prompt: str,
+        temperature: float,
+        max_tokens: int,
+        request_id: str,
+        route: dict,
+        tier: str,
+        agent_role: str = None
+    ) -> tuple[dict | None, bool, str]:
+        self.log_event(request_id, "DISPATCH_STARTED", {"execution_location": "remote"})
+        if agent_role is None:
+            agent_role = route["active_agents"][0] if route.get("active_agents") else "Planner"
+
+        attempts = 0
+        max_attempts = self.max_retries + 1
+        deadline = time.time() + 180.0
+        base_delay = 0.2
+        success = False
+        remote_res = None
+        error_reason = ""
+
+        while attempts < max_attempts and time.time() < deadline:
+            attempts += 1
+            try:
+                remote_res = self.workstation_client.dispatch_task(
+                    request_id=request_id,
+                    task_id=str(task.get("id", "task_id")),
+                    session_id=session_id,
+                    agent_role=agent_role,
+                    prompt=task["prompt"],
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    cache_disabled=self.cache_disabled
+                )
+                success = True
+                break
+            except Exception as e:
+                error_reason = str(e)
+                if attempts < max_attempts and time.time() < deadline:
+                    sleep_time = (base_delay * (2 ** (attempts - 1))) + random.uniform(0.01, 0.1)
+                    time.sleep(sleep_time)
+                else:
+                    break
+
+        if success and remote_res:
+            self.log_event(request_id, "RESULT_RECEIVED", {"source": "remote"})
+            self.log_event(request_id, "CACHE_UPDATED", {"location": "remote"})
+
+            out = dict(remote_res)
+            out["routed_tier"] = route.get("model_tier", tier)
+            out["executed_tier"] = tier
+            out["fallback_occurred"] = False
+
+            self.log_event(request_id, "COMPLETED", {"outcome": "SUCCESS"})
+            return out, True, ""
+        else:
+            self.log_event(request_id, "FALLBACK", {
+                "reason": error_reason,
+                "policy": self.fallback_policy,
+                "attempts": attempts,
+                "executed_on": "edge_medium" if self.fallback_policy != "fail" else "none"
+            })
+            if self.fallback_policy == "fail":
+                self.log_event(request_id, "COMPLETED", {"outcome": "FAILED"})
+                raise ConnectionError(f"Remote dispatch failed: {error_reason}")
+            return None, False, error_reason
+
+    def _execute_local(
+        self,
+        task: dict,
+        session_id: str,
+        system_prompt: str,
+        temperature: float,
+        max_tokens: int,
+        request_id: str,
+        route: dict,
+        tier: str,
+        prompt_hash: str,
+        fallback_occurred: bool = False,
+        timeout: float = 120.0,
+        agent_role: str = None
+    ) -> dict:
+        self.log_event(request_id, "DISPATCH_STARTED", {"execution_location": "local"})
+        if agent_role is None:
+            agent_role = route["active_agents"][0] if route.get("active_agents") else "Executor"
+
+        model_tag = "llama3.2:1b" if tier == "Small" else "llama3.2:3b"
+        model_path = resolve_model_path(model_tag)
+
+        with self.locks_lock:
+            if model_tag not in self.local_models:
+                # Edge-side execution: CPU by default, since the Pi 5 target has
+                # no usable GPU. Override via LITEAGENT_EDGE_GPU_LAYERS.
+                self.local_models[model_tag] = Llama(
+                    model_path=model_path,
+                    n_ctx=4096,
+                    n_gpu_layers=EDGE_N_GPU_LAYERS,
+                    verbose=False,
+                    seed=42,
+                )
+            if model_tag not in self.model_locks:
+                self.model_locks[model_tag] = threading.Lock()
+            llama = self.local_models[model_tag]
+            lock = self.model_locks[model_tag]
+
+        lock.acquire()
+        try:
+            if self.cache_disabled:
+                cache_hit_tier = "MISS"
+            else:
+                cache_hit_tier = self.edge_cache_manager.load_cache(
+                    session_key=session_id,
+                    llama_instance=llama,
+                    model_tag=model_tag,
+                    ctx_size=4096,
+                    prompt_hash=prompt_hash
+                )
+
+            self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
+
+            # Local execution watchdog
+            result_container = {}
+            exception_container = []
+
+            def run_inference():
+                try:
+                    prefill_start = time.time()
+                    if cache_hit_tier == "MISS":
+                        llama.reset()
+                        full_prompt = f"{system_prompt}\n{task['prompt']}".encode("utf-8")
+                        tokens = llama.tokenize(full_prompt)
+                        llama.eval(tokens)
+                        prefill_tokens = len(tokens)
+                    else:
+                        tokens = llama.tokenize(task['prompt'].encode("utf-8"))
+                        llama.eval(tokens)
+                        prefill_tokens = len(tokens)
+
+                    prefill_latency_ms = (time.time() - prefill_start) * 1000.0
+
+                    gen_start = time.time()
+                    response_tokens, response_text = InferenceEngine.generate_tokens(
+                        llama, max_tokens, temperature=temperature
+                    )
+                    generation_latency_ms = (time.time() - gen_start) * 1000.0
+
+                    result_container["prefill_tokens"] = prefill_tokens
+                    result_container["prefill_latency_ms"] = prefill_latency_ms
+                    result_container["generation_latency_ms"] = generation_latency_ms
+                    result_container["response_tokens"] = response_tokens
+                    result_container["response_text"] = response_text
+                except Exception as ex:
+                    exception_container.append(ex)
+
+            inf_thread = threading.Thread(target=run_inference, daemon=True)
+            inf_thread.start()
+            inf_thread.join(timeout=timeout)
+
+            if inf_thread.is_alive():
+                raise TimeoutError(f"Local inference execution exceeded timeout of {timeout} seconds.")
+            if exception_container:
+                raise exception_container[0]
+
+            prefill_tokens = result_container["prefill_tokens"]
+            prefill_latency_ms = result_container["prefill_latency_ms"]
+            generation_latency_ms = result_container["generation_latency_ms"]
+            response_tokens = result_container["response_tokens"]
+            response_text = result_container["response_text"]
+
+            self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
+
+            # Save cache locally
+            if not self.cache_disabled:
+                self.edge_cache_manager.save_cache(
+                    session_key=session_id,
+                    agent_role=agent_role,
+                    llama_instance=llama,
+                    model_tag=model_tag,
+                    ctx_size=4096,
+                    prompt_hash=prompt_hash
+                )
+                self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
+
+            outcome = "FALLBACK_SUCCESS" if fallback_occurred else "SUCCESS"
+            self.log_event(request_id, "COMPLETED", {"outcome": outcome})
+
+            return {
+                "response_text": response_text,
+                "tokens_generated": len(response_tokens),
+                "prefill_tokens": prefill_tokens,
+                "prefill_latency_ms": round(prefill_latency_ms, 2),
+                "generation_latency_ms": round(generation_latency_ms, 2),
+                "cache_hit_tier": cache_hit_tier,
+                "routed_tier": route.get("model_tier", tier),
+                "executed_tier": tier,
+                "fallback_occurred": fallback_occurred,
+                "request_id": request_id
+            }
+        finally:
+            lock.release()
+
+    def execute_agent_step(
+        self,
+        task_id: str,
+        prompt: str,
+        system_prompt: str,
+        agent_role: str,
+        session_key: str,
+        tier: str,
+        request_id: str = None,
+        temperature: float = 0.0,
+        max_tokens: int = 128
+    ) -> dict:
+        """
+        Executes one agent turn at an already-chosen tier.
+
+        This is the routing-free primitive the agent chain drives: the router
+        runs once per task, then each agent turn lands here with its own role
+        and cache session key.
+        """
+        request_id = request_id or str(uuid.uuid4())
+        prompt_hash = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        step_task = {"prompt": prompt, "id": task_id}
+        route = {"model_tier": tier, "active_agents": [agent_role]}
+
+        self.log_event(request_id, "AGENT_STEP_STARTED", {
+            "agent_role": agent_role,
+            "tier": tier,
+            "session_key": session_key
+        })
+
+        if tier == "Large" and self.workstation_client:
+            out, success, err_reason = self._execute_remote_with_fallback(
+                step_task, session_key, system_prompt, temperature, max_tokens,
+                request_id, route, tier, agent_role=agent_role
+            )
+            if success:
+                return out
+            logger.warning(
+                "Agent step %s falling back to local Medium execution. Reason: %s",
+                agent_role, err_reason
+            )
+            return self._execute_local(
+                step_task, session_key, system_prompt, temperature, max_tokens,
+                request_id, route, "Medium", prompt_hash,
+                fallback_occurred=True, agent_role=agent_role
+            )
+
+        exec_tier = tier if tier in ("Small", "Medium") else "Medium"
+        return self._execute_local(
+            step_task, session_key, system_prompt, temperature, max_tokens,
+            request_id, route, exec_tier, prompt_hash,
+            fallback_occurred=False, agent_role=agent_role
+        )
 
     def execute_task(
         self,
@@ -84,7 +354,7 @@ class TaskDispatcher:
         max_tokens: int = 100
     ) -> dict:
         request_id = str(uuid.uuid4())
-        
+
         # 1. Routing step
         if self.routing_disabled:
             tier = "Large"
@@ -108,169 +378,22 @@ class TaskDispatcher:
             "execution_location": location
         })
 
-        # 2. Dispatch decision
+        # 2. Remote execution branch
         if tier == "Large" and self.workstation_client:
-            self.log_event(request_id, "DISPATCH_STARTED", {"execution_location": "remote"})
-            
-            # Execute remote dispatch with configurable retries
-            attempts = 0
-            success = False
-            remote_res = None
-            error_reason = ""
-            
-            while attempts <= self.max_retries:
-                attempts += 1
-                try:
-                    # Warm-up helper if client supports it (Task 5)
-                    remote_res = self.workstation_client.dispatch_task(
-                        request_id=request_id,
-                        task_id=str(task.get("id", "task_id")),
-                        session_id=session_id,
-                        agent_role=route["active_agents"][0] if route["active_agents"] else "Planner",
-                        prompt=task["prompt"],
-                        system_prompt=system_prompt,
-                        temperature=temperature,
-                        max_tokens=max_tokens,
-                        cache_disabled=self.cache_disabled
-                    )
-                    success = True
-                    break
-                except Exception as e:
-                    error_reason = str(e)
-                    if attempts <= self.max_retries:
-                        time.sleep(0.2)
-                        continue
-                    else:
-                        break
-            
-            if success and remote_res:
-                self.log_event(request_id, "RESULT_RECEIVED", {"source": "remote"})
-                self.log_event(request_id, "CACHE_UPDATED", {"location": "remote"})
-                
-                # Merge remote execution latencies into dispatcher return
-                out = dict(remote_res)
-                out["routed_tier"] = tier
-                out["executed_tier"] = tier
-                out["fallback_occurred"] = False
-                
-                self.log_event(request_id, "COMPLETED", {"outcome": "SUCCESS"})
+            out, success, err_reason = self._execute_remote_with_fallback(
+                task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier
+            )
+            if success:
                 return out
-                
-            else:
-                # Log fallback event
-                self.log_event(request_id, "FALLBACK", {
-                    "reason": error_reason,
-                    "policy": self.fallback_policy,
-                    "attempts": attempts,
-                    "executed_on": "edge_medium" if self.fallback_policy != "fail" else "none"
-                })
-                
-                if self.fallback_policy == "fail":
-                    self.log_event(request_id, "COMPLETED", {"outcome": "FAILED"})
-                    raise ConnectionError(f"Remote dispatch failed: {error_reason}")
-                else:
-                    # Downgrade to local Medium execution
-                    print(f"Fallback triggered: degrading dispatch to local Medium-tier execution (llama3.2:3b). Reason: {error_reason}")
-                    tier = "Medium"
-                    
-        # 3. Local execution (Small, Medium, or Large-degraded-to-Medium)
-        self.log_event(request_id, "DISPATCH_STARTED", {"execution_location": "local"})
-        
-        model_tag = "llama3.2:1b" if tier == "Small" else "llama3.2:3b"
-        model_path = resolve_model_path(model_tag)
-        
-        # Load local model
-        with self.locks_lock:
-            if model_tag not in self.local_models:
-                self.local_models[model_tag] = Llama(model_path=model_path, n_ctx=4096, verbose=False, seed=42)
-            if model_tag not in self.model_locks:
-                self.model_locks[model_tag] = threading.Lock()
-            llama = self.local_models[model_tag]
-            lock = self.model_locks[model_tag]
+            # Fallback to local Medium execution
+            logger.warning("Fallback triggered: degrading dispatch to local Medium execution. Reason: %s", err_reason)
+            tier = "Medium"
+            return self._execute_local(
+                task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash, fallback_occurred=True
+            )
 
-        lock.acquire()
-        try:
-            # Load local cache state
-            if self.cache_disabled:
-                cache_hit_tier = "MISS"
-            else:
-                cache_hit_tier = self.edge_cache_manager.load_cache(
-                    session_key=session_id,
-                    llama_instance=llama,
-                    model_tag=model_tag,
-                    ctx_size=4096,
-                    prompt_hash=prompt_hash
-                )
-            
-            self.log_event(request_id, "SERVER_COMPUTE_STARTED", {"tier": tier})
-            
-            # Prefill execution
-            prefill_start = time.time()
-            if cache_hit_tier == "MISS":
-                llama.reset()
-                full_prompt = f"{system_prompt}\n{task['prompt']}".encode("utf-8")
-                tokens = llama.tokenize(full_prompt)
-                llama.eval(tokens)
-                prefill_tokens = len(tokens)
-            else:
-                tokens = llama.tokenize(task['prompt'].encode("utf-8"))
-                llama.eval(tokens)
-                prefill_tokens = len(tokens)
-                
-            prefill_latency_ms = (time.time() - prefill_start) * 1000.0
-            
-            # Generation loop
-            gen_start = time.time()
-            response_tokens = []
-            for _ in range(max_tokens):
-                if hasattr(llama, "_ctx") and llama._ctx is not None:
-                    logits_ptr = llama._ctx.get_logits()
-                    logits = np.ctypeslib.as_array(logits_ptr, shape=(llama._n_vocab,))
-                    next_token = int(np.argmax(logits))
-                else:
-                    logits = llama.eval_logits[-1]
-                    next_token = logits.index(max(logits))
-                
-                if next_token == llama.token_eos():
-                    break
-                    
-                response_tokens.append(next_token)
-                llama.eval([next_token])
-                
-            response_text = llama.detokenize(response_tokens).decode("utf-8", errors="ignore")
-            generation_latency_ms = (time.time() - gen_start) * 1000.0
-            
-            self.log_event(request_id, "SERVER_COMPUTE_FINISHED", {"tier": tier})
-            
-            # Save cache locally
-            if self.cache_disabled:
-                pass
-            else:
-                role = route["active_agents"][0] if route["active_agents"] else "Executor"
-                self.edge_cache_manager.save_cache(
-                    session_key=session_id,
-                    agent_role=role,
-                    llama_instance=llama,
-                    model_tag=model_tag,
-                    ctx_size=4096,
-                    prompt_hash=prompt_hash
-                )
-                self.log_event(request_id, "CACHE_UPDATED", {"location": "local"})
-            
-            outcome = "FALLBACK_SUCCESS" if route["model_tier"] == "Large" else "SUCCESS"
-            self.log_event(request_id, "COMPLETED", {"outcome": outcome})
-            
-            return {
-                "response_text": response_text,
-                "tokens_generated": len(response_tokens),
-                "prefill_tokens": prefill_tokens,
-                "prefill_latency_ms": round(prefill_latency_ms, 2),
-                "generation_latency_ms": round(generation_latency_ms, 2),
-                "cache_hit_tier": cache_hit_tier,
-                "routed_tier": route["model_tier"],
-                "executed_tier": tier,
-                "fallback_occurred": (route["model_tier"] == "Large"),
-                "request_id": request_id
-            }
-        finally:
-            lock.release()
+        # 3. Local execution branch
+        return self._execute_local(
+            task, session_id, system_prompt, temperature, max_tokens, request_id, route, tier, prompt_hash, fallback_occurred=False
+        )
+

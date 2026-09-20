@@ -1,7 +1,5 @@
-import pytest
-from liteagent.eval.metrics.gsm8k_metric import score_gsm8k, extract_gsm8k_answer
+from liteagent.eval.metrics.gsm8k_metric import score_gsm8k
 from liteagent.eval.metrics.hotpotqa_metric import score_hotpotqa, normalize_answer
-from liteagent.eval.metrics.humaneval_metric import score_humaneval
 from liteagent.eval.sandbox import run_sandboxed_code
 
 def test_gsm8k_scoring():
@@ -18,12 +16,12 @@ def test_hotpotqa_scoring():
     # Normalization checks
     assert normalize_answer("The United States") == "united states"
     assert normalize_answer("a simple test.") == "simple test"
-    
+
     # Exact Match & F1
     res1 = score_hotpotqa("United States of America", "The United States of America")
     assert res1["em"] == 1.0
     assert res1["f1"] == 1.0
-    
+
     res2 = score_hotpotqa("Arthur Conan Doyle", "Sir Arthur Conan Doyle")
     assert res2["em"] == 0.0
     assert round(res2["f1"], 4) == 0.8571 # 3 common / (3 pred & 4 ref) -> P=1.0, R=0.75 -> 2*1*0.75/(1.75) = 1.5/1.75 = 0.8571

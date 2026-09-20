@@ -12,5 +12,24 @@ Deploying LLMs locally on consumer and edge devices is highly constrained by lim
 ## 4. Multi-Agent LLM Systems
 Multi-agent systems orchestrate collaborative teams of specialized agents to solve complex reasoning, retrieval, and programming tasks. Frameworks like AutoGen (Wu et al., 2024) model collaboration as conversational multi-agent dialogue loops, while MetaGPT (Hong et al., 2024) structures coordination through standardized operating procedures (SOPs) based on engineering roles. CAMEL (Li et al., 2023) pioneers role-playing agent dynamics. To improve consensus and output quality, Mixture-of-Agents (Wang et al., 2024) employs layered agent clusters where multiple smaller models propose draft responses that are consolidated in subsequent layers. However, the collaborative conversational loops in these multi-agent frameworks yield massive, repetitive prefill computations and prompt contexts. KVFlow (2024) attempts to optimize multi-agent cache reuse by scheduling blocks based on static workflow graphs. Yet, none of these multi-agent systems address the latency and memory challenges of deploying agent teams in heterogeneous, low-power edge environments.
 
-## 5. LiteAgent Co-Design Positioning
-LiteAgent bridges the gap between edge multi-agent execution and systems-level resource optimization. Existing multi-agent frameworks (e.g. AutoGen, MetaGPT) treat LLMs as black-box APIs, ignoring the severe memory constraints of edge hardware. Conversely, modern KV-cache systems (e.g. vLLM, LMCache) are optimized for single-session cloud serving and fail under the dynamic context switching of multi-agent conversational chains. Our literature review did not identify prior work that combines these capabilities in the same edge-oriented multi-agent setting. LiteAgent addresses this gap through a unified co-design: it schedules and routes sub-tasks dynamically between local edge nodes (Raspberry Pi 5) and workstations based on reasoning complexity, and pairs this with a three-tier persistent KV cache manager (VRAM, local RAM, and SSD/cold storage). By coordinating routing logic and tiered cache placement, LiteAgent prevents memory thrashing, eliminates redundant prefill overhead, and enables high-accuracy multi-agent reasoning on resource-constrained edge hardware.
+## 5. Convergent Recent Work
+
+Three recent systems approach LiteAgent's setting directly and must be distinguished rather than omitted.
+
+Bao et al. (2025) route inference between a lightweight on-device model and an edge-server model using cost models that explicitly incorporate KV-cache and model-switching overhead for multi-turn dialogue. This is the closest prior formulation of routing coupled to cache cost, and it establishes that complexity routing across a device/server split is not by itself novel. It addresses single-session dialogue rather than multi-agent workflows, and treats cache cost as a switching penalty term rather than as a managed residency hierarchy.
+
+Shkolnikov (2026) persists per-agent KV caches to disk in 4-bit quantised form for multi-agent workloads on memory-constrained edge hardware, reporting large time-to-first-token gains from direct cache restoration in place of re-prefill. This substantially anticipates the persistence and tiering component of our design; it performs no complexity-based model routing, so the routing-cache interaction remains unexamined.
+
+Lu et al. (2026) propose a unified gateway that jointly selects a model, an execution site, and a KV-cache action per request across device, edge, and cloud. This articulates the co-design thesis we pursue. Critically, its evaluation is workload-level analytical simulation rather than measurement on physical heterogeneous hardware, and the authors identify system integration as an open challenge.
+
+## 6. LiteAgent Positioning
+
+LiteAgent bridges edge multi-agent execution and systems-level resource optimization. Existing multi-agent frameworks (AutoGen, MetaGPT) treat LLMs as black-box APIs, ignoring edge memory constraints; KV-cache systems (vLLM, LMCache) optimize single-session cloud serving and are not designed for the dynamic context switching of agent chains.
+
+Given the convergent work above, we scope our contribution narrowly and explicitly:
+
+1. **We do not claim complexity routing as novel.** Hybrid LLM, RouteLLM, and Bao et al. establish it.
+2. **We do not claim persistent tiered KV caching for agents as novel.** Shkolnikov (2026) and LMCache establish it.
+3. **We do not claim the co-design concept as novel.** Lu et al. (2026) state it.
+
+**What we claim** is the first *implemented and measured* evaluation of routing/cache co-design for multi-agent workloads on physically heterogeneous hardware — the empirical validation that Lu et al. leave open, extended to the multi-agent setting that Bao et al. do not cover, and combined with the runtime routing that Shkolnikov does not perform. Concretely: the set of active agents is itself chosen at runtime by the complexity router, so the workload the cache hierarchy must serve is a function of the routing decision, and eviction is prioritised by agent role. Whether that coupling yields a super-additive effect is an empirical question, tested directly by H3 (Exp 3) and reported either way.

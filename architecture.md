@@ -1,7 +1,7 @@
 # LiteAgent — Architecture
 
 ## 1. System Overview
-<TODO — filled in Phase 2>
+LiteAgent is a research systems architecture that co-designs complexity-aware routing and a three-tier KV-cache manager for multi-agent LLM workloads deployed across edge-workstation environments. Sub-tasks are dynamically classified by reasoning complexity into Small (`llama3.2:1b`), Medium (`llama3.2:3b`), and Large (`llama3.1:8b`) execution tiers while KV-cache states are managed across local VRAM/RAM, standby host RAM, and NVMe cold storage using Priority-Weighted LRU (PW-LRU) eviction.
 
 ## 2. Hardware Targets
 LiteAgent targets a dual-device co-design environment:
@@ -16,13 +16,55 @@ We recommend three quantized model tiers running via Ollama:
 - **Large (Workstation)**: `llama3.1:8b` (~4.7 GB file size, ~8 GB VRAM footprint)
 For more details, see [model_manifest.md](file:///d:/Coding/liteagent/docs/phase0/model_manifest.md).
 
-## 4. Agent Definitions
+## 4. Agent Definitions & Orchestration
 LiteAgent implements four specialized agent roles to handle target tasks:
 - **Planner**: Decomposes user queries into sub-tasks.
 - **Retriever**: Fetches relevant passages/context documents.
 - **Executor**: Generates code (HumanEval) or performs scratchpad math (GSM8K).
 - **Critic**: Reviews execution/reasoning correctness.
 For details on inputs/outputs and metrics, see [system_contract.md](file:///d:/Coding/liteagent/docs/phase0/system_contract.md).
+
+### 4.1. Message Passing
+Agents do not call one another directly. Each turn posts a typed message to a
+per-task **blackboard** (`src/liteagent/agents/messages.py`), and the next agent
+reads it back by type:
+
+| Producer | Message | Consumer |
+| :--- | :--- | :--- |
+| Planner | `PLAN` | Executor |
+| Retriever | `EVIDENCE` | Executor |
+| Executor | `DRAFT` | Critic |
+| Critic | `CRITIQUE` | Executor (revision only) |
+
+Because the chain is a dataflow graph rather than a fixed call sequence, a pruned
+agent simply leaves its message absent and downstream agents degrade instead of
+breaking. The full ordered message log is emitted per task as `agent_trace` in the
+evaluation record (schema v2), so every reported number is attributable to a
+specific agent turn.
+
+### 4.2. Execution Semantics
+- **Routing runs once per task.** The complexity score selects both the model tier and the active agent set; every agent turn then executes at that tier (`AgentOrchestrator`, `src/liteagent/agents/orchestrator.py`).
+- **Pruning is real.** A pruned agent is never invoked, so the saving is an eliminated model call rather than a bookkeeping entry.
+- **The Executor is never pruned.** It is the only agent that produces a scorable answer.
+- **The Retriever is only active for document benchmarks** (currently HotpotQA); elsewhere it is pruned as inapplicable.
+- **Revision is bounded.** A `REVISE` verdict from the Critic triggers at most `max_revisions` (default 1) additional Executor turns. An unparseable verdict defaults to approval so a malformed critique cannot discard a correct draft.
+- **Only the Executor is load-bearing.** A failed Planner, Retriever, or Critic turn is logged and skipped; a failed Executor turn propagates.
+
+### 4.3. Disclosed Asymmetry on HotpotQA
+Single-shot baselines receive the full distractor context inlined into the
+prompt. The agent chain instead receives the bare question and whatever the
+Retriever selects (currently the top 2 paragraphs). This is a genuine system
+difference, not a scoring trick, and it cuts both ways: the chain prefills far
+fewer tokens, but a retrieval miss removes evidence the baseline still has. Any
+HotpotQA comparison must report this alongside the result rather than presenting
+the token reduction as a free win.
+
+### 4.4. Why Per-Agent Cache Keys
+Each agent turn uses its own cache session key (`{session_id}::{role}`). This is
+what gives the PW-LRU policy in §6 distinct entries with distinct role priorities
+to choose between — with a single cache entry per task, the role-priority term in
+the eviction score would have nothing to discriminate on and H2/H3 would be
+degenerate.
 
 ## 5. Complexity Router
 The Complexity Router dynamically classifies incoming tasks into three model tiers (Small, Medium, Large) using a sub-millisecond Rule-Based Complexity Scorer that evaluates a Weighted Linear Complexity Function:
@@ -33,9 +75,10 @@ The router checks score thresholds derived from the master parameter $\Theta \in
 *   $\theta_{low} = 0.5 \cdot \Theta$
 *   $\theta_{high} = 0.5 + 0.5 \cdot \Theta$
 Routing mapping and agent pruning follow:
-*   **Low Complexity ($S_c < \theta_{low}$)**: Routed to the Small tier (`llama3.2:1b` on Raspberry Pi 5). Bypasses the Planner and Critic agents (only the Executor or Retriever runs).
-*   **Medium Complexity ($\theta_{low} \leq S_c < \theta_{high}$)**: Routed to the Medium tier (`llama3.2:3b` on Raspberry Pi 5). Bypasses the Critic agent (Planner, Retriever, and Executor cooperate).
-*   **High Complexity ($S_c \geq \theta_{high}$)**: Routed to the Large tier (`llama3.1:8b` on Workstation via gRPC). Runs the full agent loop (Planner, Retriever, Executor, Critic) with no pruning.
+*   **Low Complexity ($S_c < \theta_{low}$)**: Routed to the Small tier (`llama3.2:1b` on Raspberry Pi 5). Runs the Executor only.
+*   **Medium Complexity ($\theta_{low} \leq S_c < \theta_{high}$)**: Routed to the Medium tier (`llama3.2:3b` on Raspberry Pi 5). Runs Planner and Executor; the Critic is pruned.
+*   **High Complexity ($S_c \geq \theta_{high}$)**: Routed to the Large tier (`llama3.1:8b` on Workstation via gRPC). Runs Planner, Executor, and Critic.
+*   **Retrieval overlay**: for document-bearing benchmarks (HotpotQA) the Retriever is added to the active set at every tier; for all other benchmarks it is pruned as inapplicable. The Executor is never pruned at any tier.
 Every decision generates a `routing_margin` metric indicating proximity to boundaries, outputs a list of `decision_reasons`, and is written to a structured JSONL log file with hashed prompts for privacy.
 
 ## 6. Three-Tier KV-Cache Manager
@@ -143,7 +186,7 @@ graph TD
 | Ablation Configuration Overrides | Implemented `routing_disabled` and `cache_disabled` as dispatcher toggles to verify component contributions on identical code paths. | 6 | 2026-07-05 |
 | Log Parity & Feature Flags | Logs include a `"baseline"` identifier and execution `"feature_flags"` to verify and align all baseline events automatically. | 6 | 2026-07-05 |
 | Expected Limit Cache Handling | Classified prefix cache exhaustion under `EXPECTED_LIMIT_REACHED` to distinguish normal capacity bounds from runtime failures. | 6 | 2026-07-05 |
-| Context size: 4096 & Timeout: 90s | Increased context size limit to 4096 and gRPC timeout to 90s to prevent out-of-context decode crashes on long HotpotQA prompts and double-eval retry collisions during CPU inference. | 7 | 2026-07-05 |
+| Context size: 4096 & Timeout: 180s | Increased context size limit to 4096 and gRPC timeout to 180s to prevent out-of-context decode crashes on long HotpotQA prompts and double-eval retry collisions during CPU inference. | 7 | 2026-07-05 |
 
 
 ### Why not Ollama?
@@ -156,10 +199,109 @@ LiteAgent includes a multi-dataset evaluation harness that isolates executions a
 - **Subprocess-Level Security Sandboxing**: HumanEval code solutions are executed in isolated Python subprocesses (`python -E -I -S`) with stripped environment variables, strict timeouts, memory limits (RLIMIT_AS), and secondary import/file-write restrictions to prevent unintended system access.
 - **GPU Power Profiling**: Energy consumption is tracked by launching an independent background thread polling `nvidia-smi` every 100ms and integrating power draw over the execution window.
 
-### 10.1. Low-Level API Dependency (Direct-Pointer Decoding)
-To bypass the performance bottleneck of `logits_all=True` during prefill (which calculates logits for all prompt tokens), LiteAgent bypasses the high-level `llama.eval_logits` interface. Instead, it reads the logits for the last token directly from the low-level context pointer:
-`llama._ctx.get_logits()`
-*   **Warning**: This relies on an internal, unstable `llama-cpp-python` context API. Future library versions or major upgrades may require adaptation if this internal interface changes.
-*   **Fallback**: The system automatically checks for the existence of `_ctx` and falls back to `llama.eval_logits` if it is absent (e.g. during unit tests using `MockLlama`).
+### 10.3. Energy Measurement
+Energy backends live in `src/liteagent/eval/energy.py` and are selected with
+`--energy-source`. Two invariants hold across all of them:
+
+*   **Unavailable is recorded as `null`, never `0.0`.** A fabricated zero
+    averages into results as a real reading. Each record also carries
+    `energy_source` naming the backend that produced the number.
+*   **A backend refuses to report when it is not measuring the work.** The
+    NVIDIA backend is unavailable unless layers are actually offloaded,
+    because otherwise it samples an idle card.
+
+| Backend | Pi 5 | Workstation | Comparable across both |
+| :--- | :---: | :---: | :---: |
+| `nvidia_smi` | no GPU | only with offload (§10.2) | **no** |
+| `rapl` | ARM, no RAPL | Windows needs a kernel driver | **no** |
+| `external` (wall plug / inline USB-C) | yes | yes | **yes** |
+
+**The external meter is the chosen method.** H4 is a heterogeneous comparison,
+so a metric that exists on only one of the two devices cannot support it.
+Wall-plug power is also the honest figure for an edge-deployment claim:
+GPU-only sampling excludes CPU, RAM, and PSU losses. `system_contract.md` §3.1
+already specifies a USB-C meter or smart plug for the Pi, so this makes one
+method consistent across the testbed.
+
+> [!IMPORTANT]
+> **Historical energy figures are void.** Before 2026-09-20 the harness
+> integrated `nvidia-smi` unconditionally while inference ran on the CPU, so
+> `energy_joules` tracked the card's ~10 W idle draw — a rescaling of wall-clock
+> latency that correlated with latency closely enough to look plausible. No
+> energy-per-token result (H1) may be reported from data collected before an
+> external meter is in place.
+
+**Sampling-rate caveat.** Consumer meters log at roughly 1 Hz, so a task lasting
+a few seconds may contain one sample or none. `ExternalMeterEnergyMonitor`
+returns `None` rather than integrating a window with fewer than two samples.
+Prefer aggregating energy over a whole benchmark run and dividing by total
+tokens generated; per-task energy at this sampling rate is noise.
+
+### 6.1. Tier Residency Is Device-Dependent
+The Hot tier is only VRAM when layers are actually offloaded. With the current
+CPU configuration (§10.2) nothing is GPU-resident, so the hierarchy is
+**RAM/RAM/SSD on both devices**. The Raspberry Pi 5 has no usable GPU in any
+case. Until GPU offload works on the workstation, the "three-tier VRAM/RAM/SSD"
+description in the abstract and §6 overstates what runs: either restate it as a
+two-tier RAM/SSD hierarchy, or scope the VRAM tier to the workstation and only
+once offload is enabled.
+
+### 10.1. Prefill Logits Retrieval
+The prefill bottleneck came from `logits_all=True`, which materialises logits for
+every prompt token. Leaving it at its default and reading only the final token's
+logits is what recovered the ~10x prefill speedup.
+
+`InferenceEngine.get_last_logits` reads the low-level pointer
+`llama._ctx.get_logits()` first, falling back to `eval_logits` / `_scores` only
+for mock instances that have no `_ctx`.
+
+*   **This ordering is load-bearing, not a preference.** Measured on real `Llama`
+    instances (2026-09-20, both `0.3.1` and `0.3.4`, CPU and CUDA): with
+    `logits_all` left at its default, `eval_logits` and `_scores` both read back
+    **all zeros**. Only the context pointer holds decoded values. Reading a
+    high-level accessor first makes greedy sampling return `argmax(zeros) == 0`,
+    so every generation decodes to `"!!!!!!"` while still looking structurally
+    valid to the harness.
+*   **Buffer shape:** with `logits_all` disabled llama.cpp exposes only the final
+    row, so the pointer must be read as `n_vocab` floats. Reading
+    `n_tokens * n_vocab` would run past the end of the buffer.
+*   **Dependency note:** this does rely on an internal `llama-cpp-python` context
+    API, which may change across versions. That risk is accepted because the
+    documented alternative does not work. `tests/utils/test_inference_quality.py`
+    is the regression guard: it fails if the zeroed accessors are ever preferred
+    again.
+
+### 10.2. GPU Offload Status (investigated 2026-09-20)
+Inference currently runs on the **CPU** on both devices. This is a constraint,
+not a preference, and it is the reason the energy metric in §10 is invalid.
+
+What was tried on the workstation (RTX 5070, Blackwell, compute capability 12.0,
+driver 616.92, CUDA 13.1 toolkit present):
+
+| Step | Result |
+| :--- | :--- |
+| `llama-cpp-python` 0.3.4 from the `cu124` index | installs; needs the cu12 runtime DLLs, which CUDA 13 does not provide (vendored via `nvidia-*-cu12` pip packages and registered by `liteagent/cuda_setup.py`) |
+| `llama_supports_gpu_offload()` | `True`; device detected as compute 12.0 |
+| Model load with `n_gpu_layers=-1` | works; VRAM 1080 → 2797 MiB, power 9.5 → 28.8 W |
+| Prompt prefill (`eval`) | works (first call pays a one-off PTX JIT cost) |
+| `save_state` / `load_state` roundtrip | works; `LlamaState` still carries `seed`, so `cache/serialization.py` is unchanged |
+| Decode ≤ 32 tokens | works, output matches CPU byte-for-byte |
+| Decode ≥ 64 tokens | **aborts** in `ggml-cuda.cu:70` |
+| `GGML_CUDA_DISABLE_GRAPHS=1`, `GGML_CUDA_FORCE_MMQ=1` | no effect |
+
+**Diagnosis.** 0.3.4 is the newest prebuilt CUDA wheel on the official index, and
+its vendored llama.cpp predates Blackwell support. Some decode-path kernel has
+neither an sm_120 binary nor JIT-compatible PTX, so short generations survive on
+the kernels that do resolve while longer ones hit the missing one.
+
+**Options, in preference order.** (1) Build `llama-cpp-python` from source
+against a llama.cpp revision with real sm_120 support, using the installed CUDA
+13.1 toolkit and `CMAKE_CUDA_ARCHITECTURES=120` — this needs an MSVC toolchain.
+(2) Keep CPU inference and measure energy with RAPL or a wall meter, which also
+gives a single consistent method across the Pi and the workstation. (3) Report
+latency only and drop energy claims.
+
+Offload stays opt-in via `LITEAGENT_WORKSTATION_GPU_LAYERS` so the path can be
+re-tested without code changes once a working build exists.
 
 

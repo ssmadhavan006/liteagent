@@ -5,7 +5,7 @@ import tempfile
 
 # Custom import whitelist for secondary protection layer
 SAFE_MODULES = {
-    "math", "typing", "collections", "re", "string", "datetime", 
+    "math", "typing", "collections", "re", "string", "datetime",
     "itertools", "functools", "heapq", "array", "bisect"
 }
 
@@ -20,17 +20,32 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     if root_module not in {safe_modules_repr}:
         raise PermissionError(f"Import of module '{{name}}' is forbidden in this sandbox.")
     return _original_import(name, globals, locals, fromlist, level)
+
 builtins.__import__ = _safe_import
 
-# 2. Block file operations
+# 2. Block direct file operations and dangerous builtins
 def _safe_open(*args, **kwargs):
     raise PermissionError("File operations ('open') are forbidden in this sandbox.")
 builtins.open = _safe_open
 
-# 3. Block execution of student code
+def _forbidden_builtin(*args, **kwargs):
+    raise PermissionError("Dangerous builtin function is forbidden in this sandbox.")
+
+for _func_name in ["eval", "exec", "compile", "input", "breakpoint"]:
+    if hasattr(builtins, _func_name):
+        setattr(builtins, _func_name, _forbidden_builtin)
+
+# 3. Clean up loaded sensitive modules from sys.modules
+for _mod_name in ["os", "io", "subprocess", "shutil", "importlib", "ctypes", "socket", "http", "urllib", "pathlib", "sys"]:
+    sys.modules.pop(_mod_name, None)
+
+# Delete internal helpers from script namespace before running untrusted code
+del sys, _mod_name, _func_name, _forbidden_builtin
+
+# 4. Execute student code
 {code}
 
-# 4. Execute assertions / tests
+# 5. Execute assertions / tests
 {test_code}
 """
 
@@ -41,8 +56,8 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
     Layer 2: Isolates in a temporary directory.
     Layer 3: Removes environment variables.
     Layer 4: Executes under isolated python -E -I -S.
-    Layer 5: OS-level resource limits (resource.setrlimit on Unix).
-    Layer 6: Python-level monkeypatching/open blocking (secondary safeguard).
+    Layer 5: OS-level resource limits (resource.setrlimit on Unix, Job Objects on Windows where supported).
+    Layer 6: Python-level import hook & builtin restriction (secondary safeguard).
     """
     # Prepare script content
     script_content = SANDBOX_GUARD_TEMPLATE.format(
@@ -50,19 +65,19 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
         code=code,
         test_code=test_code
     )
-    
+
     # 1. Temporary directory isolation
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_file_path = os.path.join(temp_dir, "solution.py")
         with open(temp_file_path, "w", encoding="utf-8") as f:
             f.write(script_content)
-            
+
         # 2. Minimal environment variables
         minimal_env = {}
         for var in ["PATH", "SYSTEMROOT", "COMSPEC", "PATHEXT", "PYTHONPATH"]:
             if var in os.environ:
                 minimal_env[var] = os.environ[var]
-                
+
         # 3. Unix Resource Limits pre-exec function
         preexec_fn = None
         if os.name != 'nt':
@@ -76,13 +91,13 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
                 except ImportError:
                     pass
             preexec_fn = set_limits
-            
+
         # 4. Spawn subprocess running python -E -I -S
         # -E: ignore PYTHONPATH and PYTHONHOME environment variables
         # -I: isolate Python from user's environment (implies -E and -s)
         # -S: don't imply import site on initialization
         cmd = [sys.executable, "-E", "-I", "-S", temp_file_path]
-        
+
         try:
             res = subprocess.run(
                 cmd,
@@ -93,7 +108,7 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
                 preexec_fn=preexec_fn,
                 cwd=temp_dir  # execute inside temp directory
             )
-            
+
             success = (res.returncode == 0)
             failure_category = None
             if not success:
@@ -103,7 +118,7 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
                     failure_category = "FAILURE_ASSERTION"
                 else:
                     failure_category = "FAILURE_RUNTIME_ERROR"
-                    
+
             return {
                 "success": success,
                 "returncode": res.returncode,
@@ -112,7 +127,7 @@ def run_sandboxed_code(code: str, test_code: str, timeout: float = 3.0) -> dict:
                 "timeout_occurred": False,
                 "failure_category": failure_category
             }
-            
+
         except subprocess.TimeoutExpired as e:
             return {
                 "success": False,

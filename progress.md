@@ -2,10 +2,18 @@
 
 ## Current Status
 - **Active Phase:** Phase 8 — Full Evaluation Runs
-- **Last updated:** 2026-07-06
+- **Last updated:** 2026-09-20
 - **Next immediate task:** Wait for Raspberry Pi hardware delivery, configure LAN, and run full evaluation sweeps.
 - **Blockers & Dependencies:**
   - `BLOCKED`: Real cross-device LAN testing pending Pi hardware availability. Must be resolved before Phase 8 (Full Evaluation Runs) begins. Loopback baseline stands in for development/testing only.
+  - `BLOCKED`: Model weights are not currently present in the dev environment (no Ollama manifests, empty `models/`). Four model-dependent tests cannot run until weights are restored: `test_parity`, `test_harness_gsm8k_integration`, and two in `test_grpc_integration`. All 55 non-model tests pass.
+  - `OPEN RISK`: The 2026-09 literature refresh found three convergent systems that narrow the novelty claim (see `docs/phase1/annotated_bibliography.md` Cluster 5). The paper's contribution is now scoped to *empirical validation* of routing/cache co-design, which stands or falls on the H3 result.
+  - `INVALID METRIC`: `energy_joules` is not measuring inference energy. `llama-cpp-python==0.3.1` is installed from the CPU-only wheel index (`llama_supports_gpu_offload() == False`) and `n_gpu_layers` is never set anywhere in the codebase, so no inference touches the GPU. `GPUPowerTracker` has therefore been integrating the GPU's ~10 W idle draw over the task duration, making `energy_joules` a rescaling of latency rather than an energy measurement. Every H1 energy-per-token claim is invalid until inference actually runs on the GPU or a CPU/wall-power meter replaces the sensor.
+  - `CLAIM NOT IMPLEMENTED`: The "three-tier VRAM/RAM/SSD" hierarchy is currently two-tier. With a CPU-only build there is no VRAM residency, so the Hot tier is host RAM and the hierarchy is effectively RAM/RAM/SSD. The abstract and `architecture.md` §6 both claim a VRAM tier.
+  - `LABEL CIRCULARITY`: Router validation labels were assigned by a rubric defined in terms of prompt length, which is also the router's dominant feature. A single length threshold fit on the train split scores **86.67% (26/30)** on the held-out split versus the router's **56.67% (17/30)**, so the router is 30 points worse than one of its own features. Being addressed by capability-grounded relabelling (`src/liteagent/router/capability_labels.py`).
+  - `RESOLVED 2026-09-20 — DECODE CORRUPTION (was silently producing garbage)`: `InferenceEngine.get_last_logits` read `llama.eval_logits` first, then `_scores`, and only then the low-level context pointer. On real `Llama` instances **both high-level accessors read back all zeros**, so greedy sampling returned `argmax(zeros) == 0` and every generation decoded to `"!!!!!!"`. Verified identically on the originally pinned **0.3.1** and on **0.3.4**, CPU and CUDA — so this was not introduced by the CUDA migration. The intended order was already documented in `architecture.md` §10.1 (context pointer first, high-level accessors as a mock fallback); the implementation had it inverted. `src/liteagent/utils/inference.py` was never committed to git, so there is no history showing when the inversion happened. Fixed by restoring the documented order; a 1B model now correctly answers `17 * 23 = 391`, byte-identical on CPU and GPU.
+    - **Impact**: any quality number produced through `InferenceEngine` before this date is void. This covers the Phase 6 dev sanity check and the Phase 7 loopback pilot. No paper results are affected because none had been produced.
+    - **Why tests did not catch it**: the suite asserted response *shape* (non-empty string, populated metrics) and used `MockRunner`/`MockLlama` for quality assertions, so an all-token-zero decode passed every check. `tests/utils/test_inference_quality.py` now asserts on content — that logits come from the context pointer, that greedy sampling does not collapse to token 0, and (as a slow test) that a real model returns the correct arithmetic result.
 
 ## Phase Checklist
 - [x] Phase 0 — Foundations & Scoping
@@ -20,6 +28,45 @@
 - [ ] Phase 9 — Analysis & Ablations
 - [ ] Phase 10 — Paper Writing
 - [ ] Phase 11 — Review & Submission
+
+### 2026-09-20 — Multi-Agent Orchestration & Pre-Submission Integrity Fixes
+- **What was done:** Implemented the Planner→Retriever→Executor→Critic chain with real message passing, replacing the previous arrangement where `active_agents` was computed but only its first element was consumed as a cache-partition label (no chain ever executed). Added a typed-message blackboard, four role implementations with prompt construction and output parsing, and an orchestrator that routes once per task and then runs each active agent as its own model call with its own cache session key. Corrected the router accuracy contradiction, re-scoped the novelty claim against newly found competing work, and relabelled the baselines as approximations.
+- **Files touched:**
+  - [src/liteagent/agents/messages.py](file:///d:/Coding/liteagent/src/liteagent/agents/messages.py) (new)
+  - [src/liteagent/agents/roles.py](file:///d:/Coding/liteagent/src/liteagent/agents/roles.py) (new)
+  - [src/liteagent/agents/orchestrator.py](file:///d:/Coding/liteagent/src/liteagent/agents/orchestrator.py) (new)
+  - [src/liteagent/agents/__init__.py](file:///d:/Coding/liteagent/src/liteagent/agents/__init__.py) (new)
+  - [src/liteagent/runner.py](file:///d:/Coding/liteagent/src/liteagent/runner.py) (new)
+  - [src/liteagent/network/dispatch.py](file:///d:/Coding/liteagent/src/liteagent/network/dispatch.py)
+  - [src/liteagent/router/pruning.py](file:///d:/Coding/liteagent/src/liteagent/router/pruning.py)
+  - [src/liteagent/eval/harness.py](file:///d:/Coding/liteagent/src/liteagent/eval/harness.py)
+  - [tests/agents/test_chain.py](file:///d:/Coding/liteagent/tests/agents/test_chain.py) (new)
+  - [tests/router/test_pruning.py](file:///d:/Coding/liteagent/tests/router/test_pruning.py)
+  - [tests/router/validate_accuracy.py](file:///d:/Coding/liteagent/tests/router/validate_accuracy.py)
+  - [docs/phase1/annotated_bibliography.md](file:///d:/Coding/liteagent/docs/phase1/annotated_bibliography.md)
+  - [docs/phase1/novelty_matrix.md](file:///d:/Coding/liteagent/docs/phase1/novelty_matrix.md)
+  - [docs/phase1/related_work_draft.md](file:///d:/Coding/liteagent/docs/phase1/related_work_draft.md)
+  - [docs/phase1/comparison_table.md](file:///d:/Coding/liteagent/docs/phase1/comparison_table.md)
+  - [architecture.md](file:///d:/Coding/liteagent/architecture.md)
+- **Commands run:**
+  - `uv run python -m pytest tests/`
+  - `uv run python -m tests.router.validate_accuracy`
+- **Decisions made:**
+  - Agents communicate through a typed-message blackboard rather than direct calls, so a pruned agent leaves its message absent and downstream agents degrade instead of breaking.
+  - Routing runs once per task and selects both tier and active agent set; each agent turn then executes at that tier. Agent pruning is now a genuinely eliminated model call rather than a label.
+  - The Executor is never pruned at any tier — it is the only agent producing a scorable answer. The previous Small+HotpotQA mapping activated the Retriever *alone*, which would have produced no answer once the chain actually ran.
+  - The Retriever is active only for document-bearing benchmarks; for HotpotQA the chain consumes the bare question plus retrieved evidence rather than the pre-inlined context, so retrieval reduces prefill instead of duplicating it.
+  - Each agent turn gets cache session key `{session_id}::{role}`, giving PW-LRU distinct role-priority entries to discriminate between. Without this the role-priority term was inert and H2/H3 were degenerate.
+  - Critic revision is bounded to `max_revisions` (default 1), and an unparseable verdict defaults to approval so a malformed critique cannot discard a correct draft.
+  - Evaluation record bumped to `schema_version: 2`, adding `agent_trace`, `active_agents`, `pruned_agents`, `model_calls`, and `revisions`.
+- **Corrections to previously reported results:**
+  - The Phase 3 Summary claimed **70.00%** router accuracy while the Phase 3 log entry reported **56.67%**. Re-ran the validator: the true held-out figure is **56.67% (17/30)**. The 70.00% figure was wrong and has been removed.
+  - Added Wilson 95% confidence intervals and reference baselines to the validator. Held-out accuracy is 56.67% (95% CI 39.20%–72.62%, n=30) against random = 33.33% and majority-class = 33.33%. The CI lower bound clears the majority-class baseline, but the interval is wide; the split needs expanding and a second annotator before the paper.
+- **Literature refresh (2026-09-20):** Found three convergent systems missed by the Phase 1 review, all metadata verified against arXiv: Bao et al. 2025 (2508.11291, edge/device complexity routing incorporating KV-cache switching cost), Shkolnikov 2026 (2603.04428, multi-agent persistent tiered KV cache on edge hardware), and Lu et al. 2026 (2609.06940, joint routing + cache management, but analytical simulation only). Also added Hybrid LLM (2404.14618) and RouterBench (2403.12031). Novelty is re-scoped from "no prior work combines these" to "first implemented and measured co-design for multi-agent workloads on heterogeneous physical hardware."
+- **Baseline honesty:** `comparison_table.md` §2 now states explicitly that no comparator is the original system, forbids claims of the form "LiteAgent beats RouteLLM", and drops the plan to label a static-routing ablation as a KVFlow comparator.
+- **Verification:** 55 non-model tests pass (26 in agents/router, including 13 new chain tests); 1 skipped. Four model-dependent tests are blocked on absent model weights in this environment, not on code changes.
+- **Blocked on / waiting for user:** Raspberry Pi 5 hardware; restoration of local model weights for end-to-end runs.
+- **Deferred to later phase:** Expanding the router validation set and adding a second annotator (before Phase 10); deciding whether to evaluate on RouterBench.
 
 ### 2026-07-06T00:30:00+05:30 — Phase 7 Completion
 - **What was done:** Downloaded and prepared subsets for GSM8K, HotpotQA, and HumanEval datasets under a reproducible seed and stratified sampling scheme. Implemented a robust, layered subprocess-based security sandbox for code execution testing with timeout, environment sanitization, and strict memory allocation ceilings. Added real-time GPU energy profiling via polling `nvidia-smi` at 100ms. Implemented a thread-safe locking mechanism around each local and workstation Llama model instance to structurally prevent concurrent execution state corruption. Developed a direct-pointer decoding logic to bypass the `logits_all=True` performance bottleneck, resulting in a **10x prefill speedup**. Validated harness end-to-end with passing quality metrics and failure reports in a loopback pilot run.
@@ -161,7 +208,7 @@
   - Implemented log-based scaling for prompt character lengths to capture the sub-linear relationship between length and complexity.
   - Added classification confidence and margin metrics to router outputs and logs for future borderline error analysis.
   - Excluded raw prompts from log files, recording SHA256 hashes instead to ensure privacy and benchmark data redistribution compatibility.
-  - Calibrated scoring parameters via grid-search on the training set to bias=-1.2 and theta_low=0.35, theta_high=0.75, yielding 56.67% (17/30) accuracy on the held-out test set with 100% of errors falling into adjacent tiers.
+  - Calibrated scoring parameters via grid-search on the training set to bias=-1.2 and theta_low=0.35, theta_high=0.75, yielding 56.67% (17/30, 95% Wilson CI 39.20%–72.62%) accuracy on the held-out test set with 100% of errors falling into adjacent tiers.
 - **Verification:** Passed all 11 automated unit/integration tests and verified correct logging directories.
 - **Blocked on / waiting for user:** N/A
 - **Deferred to later phase:** N/A
@@ -383,7 +430,7 @@ All Phase 3 complexity router deliverables have been implemented and verified:
 1.  **YAML Config**: Configured weights and thresholds in [router_config.yaml](file:///d:/Coding/liteagent/config/router_config.yaml).
 2.  **Sanity Check Dataset**: Curated a 50-prompt validation set in [validation_prompts.json](file:///d:/Coding/liteagent/datasets/router_validation/validation_prompts.json) and documented labeling rules in [README.md](file:///d:/Coding/liteagent/datasets/router_validation/README.md).
 3.  **Core Modules**: Exposes `route_task` entrypoint via [__init__.py](file:///d:/Coding/liteagent/src/liteagent/router/__init__.py), executing feature extraction in [features.py](file:///d:/Coding/liteagent/src/liteagent/router/features.py), scoring in [classifier.py](file:///d:/Coding/liteagent/src/liteagent/router/classifier.py), pruning mappings in [pruning.py](file:///d:/Coding/liteagent/src/liteagent/router/pruning.py), and structured SHA256 prompt-hash logging in [router.py](file:///d:/Coding/liteagent/src/liteagent/router/router.py).
-4.  **Verification**: 11 unit/integration pytest cases pass cleanly, and the sanity validation script reports a calibrated routing accuracy of **70.00%** on the validation dataset.
+4.  **Verification**: 11 unit/integration pytest cases pass cleanly. The validation script reports a held-out routing accuracy of **56.67% (17/30, 95% Wilson CI 39.20%–72.62%)** on the Test split (IDs 51–80), with 0 far-tier errors. Reference points on this split: random = 33.33%, majority-class = 33.33%. The CI lower bound sits above the majority-class baseline, so the router is distinguishable from the trivial baseline, but the interval is wide and the split is small.
 
 
 ## Phase 4 Summary
@@ -423,6 +470,6 @@ All Phase 7 evaluation harness, metric definitions, and sandbox security deliver
 4.  **Energy Profiling**: Implemented GPU energy measurement tracking via a background thread polling `nvidia-smi` at 100ms. Logged both total `energy_joules` and the raw `energy_samples` count to maintain integration transparency.
 5.  **Robustness Fixes**: Increased context window limit (`n_ctx = 4096`) to support long HotpotQA contexts, and extended client timeouts (`timeout = 180s`) to prevent concurrent execution clashes during CPU inference.
 6.  **Concurrency Locking**: Configured per-model thread-safe locks to prevent task execution state corruption under connection retries or load spikes.
-7.  **Direct-Pointer Decoding**: Bypassed `logits_all=True` to achieve a 10x prefill speedup by directly reading `llama._ctx.get_logits()`. Note: This relies on an internal llama-cpp-python context API; future library versions may require adaptation if this internal interface changes. The system automatically falls back to `llama.eval_logits` if `_ctx` is absent.
+7.  **Direct-Pointer Decoding**: Bypassed `logits_all=True` to achieve a 10x prefill speedup. **Correction (2026-09-20):** the speedup comes from leaving `logits_all` at its default and reading only the final token's logits, *not* from the `llama._ctx.get_logits()` pointer read. Runtime probing shows real `Llama` instances under 0.3.1 expose a non-empty `eval_logits`, so `InferenceEngine.get_last_logits` always takes that first branch and the `_ctx` pointer path is dead code. The documented dependency on an unstable internal API does not apply to the executing path.
 8.  **Verification**: Verified correctness of all metrics and sandboxing, and completed a loopback pilot evaluation sweep. Deliberately verified checkpoint/resume functionality successfully skips completed tasks without duplicating records or corrupting logs.
 

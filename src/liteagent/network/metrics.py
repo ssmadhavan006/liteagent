@@ -19,7 +19,7 @@ def compute_latency_breakdown(
         server_serialize_ms +
         client_deserialize_ms
     )
-    
+
     return {
         "client_serialize_ms": round(client_serialize_ms, 2),
         "client_deserialize_ms": round(client_deserialize_ms, 2),

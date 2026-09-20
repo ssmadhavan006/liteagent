@@ -24,18 +24,28 @@ def select_eviction_victim(
     Selects the key from active_keys that has the highest PW-LRU eviction score.
     Returns (victim_key, score).
     """
+    if not active_keys:
+        return None, -1.0
+
     current_time = time.time()
     highest_score = -1.0
     victim_key = None
-    
+
     for key in active_keys:
         meta = metadata_store.get(key)
         if not meta:
-            continue
-            
-        score = compute_eviction_score(meta.last_accessed, current_time, meta.agent_role)
+            # If metadata is missing, prioritize this key for eviction
+            score = float("inf")
+        else:
+            score = compute_eviction_score(meta.last_accessed, current_time, meta.agent_role)
+
         if score > highest_score:
             highest_score = score
             victim_key = key
-            
+
+    if victim_key is None and active_keys:
+        victim_key = active_keys[0]
+        highest_score = 0.0
+
     return victim_key, highest_score
+

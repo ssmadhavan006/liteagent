@@ -9,7 +9,7 @@ class StorageManager:
     def __init__(self, ssd_dir: str):
         self.ssd_dir = ssd_dir
         self.standby_cache = {}  # Dict[key, bytes]
-        
+
         if ssd_dir:
             os.makedirs(ssd_dir, exist_ok=True)
 
@@ -32,17 +32,17 @@ class StorageManager:
         """
         if not self.ssd_dir:
             raise ValueError("SSD directory not configured.")
-            
+
         start_time = time.perf_counter()
-        
+
         bin_path = os.path.join(self.ssd_dir, f"{key}.bin")
         json_path = os.path.join(self.ssd_dir, f"{key}.json")
-        
+
         try:
             # Write state binary
             with open(bin_path, "wb") as f:
                 f.write(data)
-                
+
             # Write companion JSON metadata
             with open(json_path, "w") as f:
                 json.dump(metadata, f, indent=2)
@@ -53,7 +53,7 @@ class StorageManager:
             if os.path.exists(json_path):
                 os.remove(json_path)
             raise IOError(f"SSD Write failed for key {key}: {e}") from e
-            
+
         latency_ms = (time.perf_counter() - start_time) * 1000.0
         return latency_ms, len(data)
 
@@ -65,46 +65,52 @@ class StorageManager:
         """
         if not self.ssd_dir:
             raise ValueError("SSD directory not configured.")
-            
+
         bin_path = os.path.join(self.ssd_dir, f"{key}.bin")
         json_path = os.path.join(self.ssd_dir, f"{key}.json")
-        
+
         # 1. Missing file checks
         if not os.path.exists(bin_path):
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Binary cache file missing at {bin_path}")
         if not os.path.exists(json_path):
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Metadata cache file missing at {json_path}")
-            
+
         # 2. Corruption checks: zero length
         if os.path.getsize(bin_path) == 0:
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Binary cache file at {bin_path} is empty")
         if os.path.getsize(json_path) == 0:
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Metadata cache file at {json_path} is empty")
-            
+
         start_time = time.perf_counter()
-        
+
         try:
             with open(bin_path, "rb") as f:
                 data = f.read()
         except Exception as e:
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Binary read error at {bin_path}: {e}") from e
-            
+
         try:
             with open(json_path, "r") as f:
                 metadata = json.load(f)
         except Exception as e:
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Metadata corruption (invalid JSON) at {json_path}: {e}") from e
-            
+
         # Check for partial write indicator (e.g. metadata is missing required fields)
         if "model_tag" not in metadata or "state_size_bytes" not in metadata:
             raise CacheRestoreError(f"CACHE_RESTORE_FAILED: Metadata incomplete or corrupted at {json_path}")
-            
+
+        # Check cache format version compatibility
+        if metadata.get("cache_format_version") != 1:
+            raise CacheRestoreError(
+                f"CACHE_RESTORE_FAILED: Cache format version mismatch ({metadata.get('cache_format_version')} != 1) at {json_path}"
+            )
+
         # Check size consistency
         if len(data) != metadata["state_size_bytes"]:
             raise CacheRestoreError(
                 f"CACHE_RESTORE_FAILED: Size mismatch between binary file ({len(data)}B) and metadata ({metadata['state_size_bytes']}B)"
             )
-            
+
         latency_ms = (time.perf_counter() - start_time) * 1000.0
         return data, metadata, latency_ms
 
@@ -113,7 +119,7 @@ class StorageManager:
             return
         bin_path = os.path.join(self.ssd_dir, f"{key}.bin")
         json_path = os.path.join(self.ssd_dir, f"{key}.json")
-        
+
         if os.path.exists(bin_path):
             try:
                 os.remove(bin_path)

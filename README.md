@@ -8,8 +8,8 @@ LiteAgent is a research systems project that co-designs complexity-aware routing
 
 This repository relies on three root documents to govern development and trace progress:
 1.  **[architecture.md](file:///d:/Coding/liteagent/architecture.md)**: The technical design, system overview, hardware targets, model tiers, and design decisions log.
-2.  **`rules.md` (Local / Ignored)**: Core operating rules, reproducibility guidelines, and coding best practices. Keep this file local as it is ignored in Git.
-3.  **`progress.md` (Local / Ignored)**: The single source of truth for the project state and the reverse-chronological development checklist log. Keep this file local as it is ignored in Git.
+2.  **`rules.md` (Local / Ignored)**: Core operating rules, reproducibility guidelines, and coding best practices.
+3.  **`progress.md`**: The single source of truth for the project state and the reverse-chronological development checklist log. Tracked in repository for project state continuity.
 
 ---
 
@@ -40,4 +40,4 @@ liteagent/
 *   [Ollama](https://ollama.com/) (installed locally for model inference)
 
 ### 2. Pulling Models
-Follow the instructions in [model_manifest.md](file:///d:/Coding/liteagent/docs/phase0/model_manifest.md) to download the three required model tiers (`llama3.2:1b`, `llama3.1:8b`, and `qwen2.5:14b`).
+Follow the instructions in [model_manifest.md](file:///d:/Coding/liteagent/docs/phase0/model_manifest.md) to download the three required model tiers (`llama3.2:1b`, `llama3.2:3b`, and `llama3.1:8b`).

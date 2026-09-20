@@ -48,7 +48,7 @@ class VLLMPrefixCacheApprox(KVCacheManager):
                     "session_key": session_key
                 })
                 raise RuntimeError("EXPECTED_LIMIT_REACHED: Max in-memory prefix slots exhausted.")
-            
+
         try:
             state = llama_instance.save_state()
             self.active_slots[session_key] = state

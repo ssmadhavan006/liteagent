@@ -20,13 +20,13 @@ class CacheStateMetadata:
         self.prompt_hash = prompt_hash
         self.state_size_bytes = state_size_bytes
         self.cache_format_version = cache_format_version
-        
+
         # Get llama-cpp version programmatically
         try:
             self.llama_cpp_version = llama_cpp.__version__
         except AttributeError:
             self.llama_cpp_version = "0.3.1"
-            
+
         self.last_accessed = time.time()
         self.created_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
 

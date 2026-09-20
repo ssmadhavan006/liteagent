@@ -1,6 +1,12 @@
 # LiteAgent — Annotated Bibliography
 
-This document lists the 22 most relevant papers forming the academic foundation for LiteAgent, divided into four key clusters: Complexity-Aware Routing, KV-Cache Management, Edge Serving, and Multi-Agent Orchestration.
+This document lists the most relevant papers forming the academic foundation for LiteAgent, divided into four key clusters: Complexity-Aware Routing, KV-Cache Management, Edge Serving, and Multi-Agent Orchestration, plus a fifth cluster added in the 2026-09 refresh covering directly competing systems.
+
+> [!IMPORTANT]
+> **2026-09-20 literature refresh.** The original 22-entry review was completed in
+> 2026-07 and missed several closely related systems, three of which materially
+> narrow LiteAgent's novelty claim. They are recorded in Cluster 5 below. All
+> metadata there was retrieved from arXiv directly, not recalled.
 
 ---
 
@@ -189,3 +195,51 @@ This document lists the 22 most relevant papers forming the academic foundation 
 - **Cluster:** multi-agent
 - **Summary (paraphrased, 2-4 sentences):** KVFlow optimizes KV-cache utilization in multi-agent workflows by abstracting agent schedules as an "Agent Step Graph." It schedules and prefetches cache blocks based on predicted execution paths, significantly reducing prefill latency in complex collaborative agent chains.
 - **Relevance to LiteAgent:** Extremely relevant context. LiteAgent co-designs this workflow prefetching approach with edge-workstation complexity routing.
+
+---
+
+## Cluster 5: Directly Competing Systems (2026-09 refresh)
+
+> These entries were missed by the original Phase 1 review. Each one overlaps a
+> capability LiteAgent claims. They must be cited and distinguished in Related
+> Work, not omitted.
+
+### Hybrid LLM: Cost-Efficient and Quality-Aware Query Routing
+- **Authors:** Dujian Ding, Ankur Mallick, Chi Wang, Robert Sim, Subhabrata Mukherjee, Victor Rühle, Laks V.S. Lakshmanan, Ahmed Awadallah
+- **Venue/Year:** ICLR 2024
+- **Link:** [https://arxiv.org/abs/2404.14618](https://arxiv.org/abs/2404.14618)
+- **Cluster:** routing
+- **Summary (paraphrased, 2-4 sentences):** Routes each query to either a small local model or a large model using a router trained to predict query difficulty against a tunable quality target. The quality/cost trade-off point can be adjusted at test time without retraining. Reports up to 40% fewer large-model calls at no measured quality loss.
+- **Relevance to LiteAgent:** Direct prior art for H1. It establishes small-local/large-remote difficulty routing, so H1 alone is not novel; LiteAgent must claim the cache interaction, not the routing idea.
+
+### RouterBench: A Benchmark for Multi-LLM Routing Systems
+- **Authors:** Qitian Jason Hu, Jacob Bieker, Xiuyu Li, Nan Jiang, Benjamin Keigwin, Gaurav Ranganath, Kurt Keutzer, Shriyash Kaustubh Upadhyay
+- **Venue/Year:** arXiv 2024 (2403.12031)
+- **Link:** [https://arxiv.org/abs/2403.12031](https://arxiv.org/abs/2403.12031)
+- **Cluster:** routing
+- **Summary (paraphrased, 2-4 sentences):** Provides a standardised benchmark and dataset (>405k inference outcomes) for evaluating LLM routers on cost and performance, with a theoretical framework for router comparison. Notes that latency and throughput are not yet covered by the benchmark.
+- **Relevance to LiteAgent:** A reviewer will ask why the router is evaluated on an 80-prompt self-labelled set rather than a standard benchmark. We should either evaluate on RouterBench or state explicitly why its cloud-cost model does not transfer to our latency/energy-bound edge setting.
+
+### Dynamic Quality-Latency Aware Routing for LLM Inference in Wireless Edge-Device Networks
+- **Authors:** Rui Bao, Nan Xue, Yaping Sun, Zhiyong Chen
+- **Venue/Year:** arXiv 2025-08-15 (2508.11291)
+- **Link:** [https://arxiv.org/abs/2508.11291](https://arxiv.org/abs/2508.11291)
+- **Cluster:** routing / edge
+- **Summary (paraphrased, 2-4 sentences):** Routes inference between a lightweight on-device model and a powerful edge-server model using cost models covering query complexity, communication overhead, and computation. Explicitly includes context-aware costs from model switching and KV-cache management for multi-turn dialogue. Reports 5–15% latency reduction and 10–20% fewer large-model invocations on MMLU, GSM8K, and MT-Bench-101.
+- **Relevance to LiteAgent:** **The closest prior work to our H1+H3 combination.** It already couples complexity routing with KV-cache switching cost across a device/server split. Our remaining distinction is multi-agent workloads and a persistent three-tier (VRAM/RAM/SSD) hierarchy rather than a switching-cost term. This must be stated explicitly.
+
+### Agent Memory Below the Prompt: Persistent Q4 KV Cache for Multi-Agent LLM Inference on Edge Devices
+- **Authors:** Yakov Pyotr Shkolnikov
+- **Venue/Year:** arXiv 2026-02-17 (2603.04428)
+- **Link:** [https://arxiv.org/abs/2603.04428](https://arxiv.org/abs/2603.04428)
+- **Cluster:** kv-cache / multi-agent / edge
+- **Summary (paraphrased, 2-4 sentences):** Persists each agent's KV cache to disk in 4-bit quantised form and restores it directly into the attention layer, avoiding re-prefill when a multi-agent workflow exceeds device memory. Uses a RAM-active / disk-persistent tiering on edge-class hardware (Apple M4 Pro), evaluated with Gemma 3 12B, DeepSeek-Coder-V2-Lite 16B, and Llama 3.1 8B. Reports 22–136x time-to-first-token improvement from cache restoration.
+- **Relevance to LiteAgent:** **Substantially anticipates H2.** Multi-agent, persistent, tiered, edge, and one shared model (Llama 3.1 8B). It does *not* perform complexity-based model routing, which is where LiteAgent still differs. Our H2 claim must be reframed as confirmatory rather than novel, and our TTFT numbers should be positioned against this result.
+
+### Unified AI Gateway: A Framework for Joint Model Routing and KV Cache Management
+- **Authors:** Jiaxun Lu, Xiang Zhang, Yunfeng Shao
+- **Venue/Year:** arXiv 2026-09-07 (2609.06940)
+- **Link:** [https://arxiv.org/abs/2609.06940](https://arxiv.org/abs/2609.06940)
+- **Cluster:** routing / kv-cache / co-design
+- **Summary (paraphrased, 2-4 sentences):** Proposes an edge-deployed gateway that jointly selects a target model, an execution site, and a KV-cache action per request, optimising cache placement across device, edge, and cloud. Reports TTFT speedups of 1.25x–13.28x from workload-level analytical simulation across eight workload profiles. It is a vision/position paper synthesising existing techniques rather than a built system with hardware measurements.
+- **Relevance to LiteAgent:** **States our co-design thesis explicitly, but does not validate it empirically.** Because its evaluation is analytical simulation rather than measurement on real heterogeneous hardware, it converts our contribution from "new idea" to "first empirical validation of a proposed idea" — a weaker but still publishable claim, and one this paper can be cited to motivate.

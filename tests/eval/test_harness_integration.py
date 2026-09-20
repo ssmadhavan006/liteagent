@@ -1,6 +1,5 @@
 import os
 import json
-import pytest
 import tempfile
 from liteagent.eval.harness import EvaluationHarness
 
@@ -26,19 +25,19 @@ def test_harness_gsm8k_integration():
     with tempfile.TemporaryDirectory() as tmp_dir:
         res_file = os.path.join(tmp_dir, "results.jsonl")
         fail_file = os.path.join(tmp_dir, "failed.jsonl")
-        
+
         harness = EvaluationHarness(
             baseline_name="mock_baseline",
             results_path=res_file,
             failed_path=fail_file
         )
-        
+
         runner = MockRunner(response="The answer is #### 42")
         task_item = {
             "question": "What is 40 + 2?",
             "answer": "#### 42"
         }
-        
+
         res = harness.evaluate_task(
             dataset="gsm8k",
             task_id="gsm8k_001",
@@ -46,40 +45,53 @@ def test_harness_gsm8k_integration():
             runner=runner,
             task_item=task_item
         )
-        
+
         assert res["success"] is True
         assert os.path.exists(res_file)
-        
+
         # Read the logged record
         with open(res_file, "r") as f:
             lines = f.readlines()
             assert len(lines) == 1
             record = json.loads(lines[0])
-            assert record["schema_version"] == 1
+            assert record["schema_version"] == 2
             assert record["task_id"] == "gsm8k_001"
             assert record["baseline"] == "mock_baseline"
             assert record["dataset"] == "gsm8k"
             assert record["metrics"]["quality_score"] == 1.0
-            assert isinstance(record["metrics"]["energy_joules"], float)
+            # Energy is None, never 0.0, when no backend can measure the run:
+            # a fabricated zero would average into results as a real reading.
+            energy = record["metrics"]["energy_joules"]
+            assert energy is None or isinstance(energy, float)
+            if energy is None:
+                assert record["metrics"]["energy_source"] is None
+            else:
+                assert record["metrics"]["energy_source"] in (
+                    "nvidia_smi", "rapl", "external_meter"
+                )
+            # v2 adds per-agent attribution; a single-shot runner reports an
+            # empty trace rather than omitting the block.
+            assert record["agents"]["agent_trace"] == []
+            assert record["metrics"]["model_calls"] == 1
 
 def test_harness_humaneval_sandbox_failure_integration():
     with tempfile.TemporaryDirectory() as tmp_dir:
         res_file = os.path.join(tmp_dir, "results.jsonl")
         fail_file = os.path.join(tmp_dir, "failed.jsonl")
-        
+
         harness = EvaluationHarness(
             baseline_name="mock_humaneval",
             results_path=res_file,
             failed_path=fail_file
         )
-        
+
         # This code fails assertion
         runner = MockRunner(response="def add(a, b):\n    return a - b")
         task_item = {
             "prompt": "def add(a, b):\n",
             "test": "assert add(2, 3) == 5"
         }
-        
+
         res = harness.evaluate_task(
             dataset="humaneval",
             task_id="he_001",
@@ -87,14 +99,14 @@ def test_harness_humaneval_sandbox_failure_integration():
             runner=runner,
             task_item=task_item
         )
-        
+
         assert res["success"] is True
         assert res["record"]["metrics"]["quality_score"] == 0.0
-        
+
         # Assert both files exist
         assert os.path.exists(res_file)
         assert os.path.exists(fail_file)
-        
+
         # Check failed log contains details
         with open(fail_file, "r") as f:
             lines = f.readlines()

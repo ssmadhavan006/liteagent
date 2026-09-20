@@ -10,7 +10,7 @@ def extract_gsm8k_answer(text: str) -> str:
     if openai_match:
         val = openai_match.group(1).replace(",", "")
         return val.rstrip(".")
-        
+
     # 2. Otherwise extract the last numeric token in the text
     # We clean the text of surrounding punctuation except math signs/numbers
     clean_tokens = [w.strip(".,!?;:") for w in text.split()]

@@ -49,7 +49,7 @@ def setup_and_teardown():
 def test_routing_only_ablation():
     edge_cm = KVCacheManager(max_ram_states=2, ssd_dir=SSD_TEST_DIR, log_dir=LOG_TEST_DIR)
     client = DummyClient()
-    
+
     dispatcher = TaskDispatcher(
         router_config_path="config/router_config.yaml",
         edge_cache_manager=edge_cm,
@@ -57,7 +57,7 @@ def test_routing_only_ablation():
         log_dir=LOG_TEST_DIR
     )
     configure_routing_only(dispatcher)
-    
+
     # We pass a highly complex prompt to guarantee Large-tier routing
     task = {
         "id": 101,
@@ -70,13 +70,13 @@ def test_routing_only_ablation():
         ) * 15,
         "benchmark": "HumanEval"
     }
-    
+
     res = dispatcher.execute_task(task, "session-ro", "system-ro")
-    
+
     assert dispatcher.baseline_name == "routing_only"
     assert dispatcher.routing_disabled is False
     assert dispatcher.cache_disabled is True
-    
+
     # Verify that gRPC dispatch request was called with cache_disabled=True
     assert len(client.dispatched) == 1
     assert client.dispatched[0]["cache_disabled"] is True
@@ -85,7 +85,7 @@ def test_routing_only_ablation():
 def test_cache_only_ablation():
     edge_cm = KVCacheManager(max_ram_states=2, ssd_dir=SSD_TEST_DIR, log_dir=LOG_TEST_DIR)
     client = DummyClient()
-    
+
     dispatcher = TaskDispatcher(
         router_config_path="config/router_config.yaml",
         edge_cache_manager=edge_cm,
@@ -93,20 +93,20 @@ def test_cache_only_ablation():
         log_dir=LOG_TEST_DIR
     )
     configure_cache_only(dispatcher)
-    
+
     # Even with a very simple low-complexity prompt, it must route to Large workstation tier
     task = {
         "id": 102,
         "prompt": "Hello",
         "benchmark": "HotpotQA"
     }
-    
+
     res = dispatcher.execute_task(task, "session-co", "system-co")
-    
+
     assert dispatcher.baseline_name == "cache_only"
     assert dispatcher.routing_disabled is True
     assert dispatcher.cache_disabled is False
-    
+
     # Verify that gRPC dispatch request was called with cache_disabled=False
     assert len(client.dispatched) == 1
     assert client.dispatched[0]["cache_disabled"] is False

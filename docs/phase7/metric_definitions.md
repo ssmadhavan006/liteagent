@@ -58,6 +58,7 @@ Every completed task evaluation record is appended to `experiments/evaluation_re
     },
     "latency_ms": 1420.5,
     "energy_joules": 28.5,
+    "energy_samples": 14,
     "prefill_tokens": 120,
     "tokens_generated": 15,
     "cache_hit_tier": "STANDBY",

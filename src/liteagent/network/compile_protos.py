@@ -8,7 +8,7 @@ def compile_proto():
     if not os.path.exists(proto_file):
         print(f"Error: {proto_file} not found.")
         sys.exit(1)
-        
+
     cmd = [
         sys.executable,
         "-m",
@@ -18,7 +18,7 @@ def compile_proto():
         "--grpc_python_out=src",
         proto_file
     ]
-    
+
     print(f"Running: {' '.join(cmd)}")
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:

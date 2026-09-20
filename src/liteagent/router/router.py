@@ -7,6 +7,10 @@ from liteagent.router.classifier import ComplexityScorer
 from liteagent.router.features import extract_raw_features, normalize_features
 from liteagent.router.pruning import map_tier_and_pruning
 
+import threading
+
+_ROUTER_LOG_LOCK = threading.Lock()
+
 def compute_prompt_hash(prompt: str) -> str:
     return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 
@@ -55,28 +59,28 @@ def route_task(task: dict, config_path: str = None, log_dir: str = "experiments"
     }
     """
     start_time = time.time()
-    
+
     prompt = task.get("prompt", "")
     benchmark = task.get("benchmark", "")
-    
+
     # 1. Feature extraction & normalization
     raw_feats = extract_raw_features(prompt)
     norm_feats = normalize_features(raw_feats)
-    
+
     # 2. Heuristic scoring
     scorer = ComplexityScorer(config_path)
     score, confidence = scorer.score_task(norm_feats)
-    
+
     # 3. Agent pruning & location mapping
     tier, location, active, pruned = map_tier_and_pruning(score, scorer.theta_low, scorer.theta_high, benchmark)
-    
+
     # 4. Routing metadata
     margin = compute_routing_margin(score, scorer.theta_low, scorer.theta_high, tier)
     reasons = get_decision_reasons(norm_feats)
     prompt_hash = compute_prompt_hash(prompt)
-    
+
     latency_ms = (time.time() - start_time) * 1000.0
-    
+
     # 5. Structured Logging
     log_entry = {
         "timestamp": datetime.datetime.now(datetime.UTC).isoformat() + "Z",
@@ -92,13 +96,19 @@ def route_task(task: dict, config_path: str = None, log_dir: str = "experiments"
         "decision_reasons": reasons,
         "latency_ms": round(latency_ms, 3)
     }
-    
+
     if log_dir:
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, "routing_decisions.jsonl")
-        with open(log_file, "a") as f:
-            f.write(json.dumps(log_entry) + "\n")
-            
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "routing_decisions.jsonl")
+            with _ROUTER_LOG_LOCK:
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_entry) + "\n")
+                    f.flush()
+        except Exception as e:
+            import sys
+            print(f"Warning: Failed to write routing log: {e}", file=sys.stderr)
+
     return {
         "model_tier": tier,
         "execution_location": location,

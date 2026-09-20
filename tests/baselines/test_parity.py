@@ -50,10 +50,10 @@ def validate_log_schema(log_file: str, expected_baseline: str):
             assert "event" in data and isinstance(data["event"], str)
             assert "baseline" in data and isinstance(data["baseline"], str)
             assert "feature_flags" in data and isinstance(data["feature_flags"], dict)
-            
+
             # 2. Check baseline value matches
             assert data["baseline"] == expected_baseline
-            
+
             # 3. Check feature_flags keys and types
             ff = data["feature_flags"]
             assert "routing" in ff and isinstance(ff["routing"], bool)
@@ -64,44 +64,44 @@ def test_instrumentation_parity_all_baselines():
     edge_cm = KVCacheManager(max_ram_states=2, ssd_dir=SSD_TEST_DIR, log_dir=LOG_TEST_DIR)
     client = DummyClient()
     task = {"id": 101, "prompt": "def greet():\n  pass\n" * 15, "benchmark": "HumanEval"}
-    
+
     # 1. LiteAgent (Full)
     la_dispatcher = TaskDispatcher("config/router_config.yaml", edge_cm, client, LOG_TEST_DIR)
     la_dispatcher.baseline_name = "liteagent"
     la_dispatcher.execute_task(task, "s-la", "sys")
     validate_log_schema(os.path.join(LOG_TEST_DIR, "operations.jsonl"), "liteagent")
-    
+
     # Reset log file for next test
     os.remove(os.path.join(LOG_TEST_DIR, "operations.jsonl"))
-    
+
     # 2. Static Full-Pipeline
     sf_runner = StaticFullPipelineRunner(client, LOG_TEST_DIR)
     # Patch dummy manager to avoid directory collision in parallel runs
     sf_runner.dispatcher.edge_cache_manager = edge_cm
     sf_runner.execute_task(task, "s-sf", "sys")
     validate_log_schema(os.path.join(LOG_TEST_DIR, "operations.jsonl"), "static_full")
-    
+
     # Reset
     os.remove(os.path.join(LOG_TEST_DIR, "operations.jsonl"))
-    
+
     # 3. LiteAgent (Routing Only)
     ro_dispatcher = TaskDispatcher("config/router_config.yaml", edge_cm, client, LOG_TEST_DIR)
     configure_routing_only(ro_dispatcher)
     ro_dispatcher.execute_task(task, "s-ro", "sys")
     validate_log_schema(os.path.join(LOG_TEST_DIR, "operations.jsonl"), "routing_only")
-    
+
     # Reset
     os.remove(os.path.join(LOG_TEST_DIR, "operations.jsonl"))
-    
+
     # 4. LiteAgent (Cache Only)
     co_dispatcher = TaskDispatcher("config/router_config.yaml", edge_cm, client, LOG_TEST_DIR)
     configure_cache_only(co_dispatcher)
     co_dispatcher.execute_task(task, "s-co", "sys")
     validate_log_schema(os.path.join(LOG_TEST_DIR, "operations.jsonl"), "cache_only")
-    
+
     # Reset
     os.remove(os.path.join(LOG_TEST_DIR, "operations.jsonl"))
-    
+
     # 5. RouteLLM Heuristic
     rl_dispatcher = RouteLLMHeuristicDispatcher(client, edge_cm, LOG_TEST_DIR, threshold=0.5)
     rl_dispatcher.execute_task(task, "s-rl", "sys")

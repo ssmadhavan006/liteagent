@@ -6,7 +6,7 @@ def test_get_entity_density():
     # Word count: 6. Expected density: 1/6 = 0.1666...
     prompt = "What is the capital of Japan?"
     assert abs(get_entity_density(prompt) - 0.1666666) < 1e-4
-    
+
     # First word starts with capital, others do not
     prompt2 = "Hello world check"
     assert get_entity_density(prompt2) == 0.0
@@ -19,7 +19,7 @@ def test_extract_raw_features():
     # code_syntax_count: 0
     prompt = "Compute 15 + 23 - 4."
     features = extract_raw_features(prompt)
-    
+
     assert features["length_chars"] == 20.0
     assert features["code_syntax_count"] == 0.0
     assert features["math_operator_density"] == 0.1
@@ -35,7 +35,7 @@ def test_extract_raw_features_code():
     # math_operators: '+' (1) -> 1/32 = 0.03125
     prompt = "def add(a, b):\n    return a + b"
     features = extract_raw_features(prompt)
-    
+
     assert features["length_chars"] == 31.0
     assert features["code_syntax_count"] == 2.0
     assert features["math_operator_density"] == 1.0 / 31.0
@@ -52,7 +52,7 @@ def test_normalize_features():
         "entity_density": 0.2
     }
     norm = normalize_features(raw)
-    
+
     assert norm["length_chars"] == 1.0
     assert norm["code_syntax_count"] == 1.0
     assert norm["math_operator_density"] == 0.5
