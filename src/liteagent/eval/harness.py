@@ -245,7 +245,15 @@ class EvaluationHarness:
 
         elif dataset == "humaneval":
             test_code = task_item.get("test", "")
-            eval_res = score_humaneval(response, test_code, timeout=3.0)
+            # The prompt carries the signature, imports and docstring; without
+            # it a body-only completion is not a runnable program.
+            eval_res = score_humaneval(
+                response,
+                test_code,
+                timeout=3.0,
+                prompt=task_item.get("prompt", ""),
+                entry_point=task_item.get("entry_point", ""),
+            )
             quality_score = eval_res["pass_status"]
             quality_extra = {
                 "success": eval_res["success"],

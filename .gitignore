@@ -38,3 +38,6 @@ experiments/
 
 # Knowledge-graph tooling output
 graphify-out/
+
+# Local operating rules (documented as Local / Ignored in progress.md)
+rules.md

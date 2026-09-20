@@ -29,6 +29,22 @@
 - [ ] Phase 10 — Paper Writing
 - [ ] Phase 11 — Review & Submission
 
+### 2026-09-20 (later) — HumanEval Scoring Was Returning Zero For Every Task
+- **What was done:** Found and fixed two independent defects that made the HumanEval metric score 0.0 for every input, including the dataset's own reference solutions. Verified by scoring all 80 canonical solutions in the subset: **0/80 before, 80/80 after.**
+- **Defect 1 — the sandbox rejected valid code.** `SANDBOX_GUARD_TEMPLATE` installed the restrictive import hook *before* any permitted module was loaded, and popped `io`, `importlib` and `sys` from `sys.modules`. Loading a permitted module pulls in transitive dependencies (`enum`, `abc`, `sre_compile`, …) that are not on the allowlist, so `from typing import List` — which opens a large share of HumanEval problems — raised `PermissionError`. Fixed by pre-importing every permitted module while the import system still works, then installing the hook and dropping capability-bearing modules.
+- **Defect 2 — the executed program was not runnable.** A HumanEval prompt is a signature plus docstring and the model supplies the body, so the program must be `prompt + completion`. `score_humaneval` executed the completion alone. Compounding it, `extract_code_from_markdown` calls `.strip()`, which unindents only the first line of a function body and raises `IndentationError` on the second. Fixed with `build_program()`, which preserves body indentation, appends to the prompt, re-indents a flush-left body, and uses the completion as-is (retaining prompt imports) when the model restated the whole function.
+- **Security note:** the allowlist is now captured in a closure over a `frozenset` rather than read from a module global. The first fix attempt deleted the global and broke the hook with `NameError`; a mutable global would also have let solution code run `_SAFE.add('os')` and escape. Both are covered by tests.
+- **Files touched:**
+  - [src/liteagent/eval/sandbox.py](file:///d:/Coding/liteagent/src/liteagent/eval/sandbox.py)
+  - [src/liteagent/eval/metrics/humaneval_metric.py](file:///d:/Coding/liteagent/src/liteagent/eval/metrics/humaneval_metric.py)
+  - [src/liteagent/eval/harness.py](file:///d:/Coding/liteagent/src/liteagent/eval/harness.py)
+  - [src/liteagent/router/capability_labels.py](file:///d:/Coding/liteagent/src/liteagent/router/capability_labels.py)
+  - [tests/eval/test_humaneval_program.py](file:///d:/Coding/liteagent/tests/eval/test_humaneval_program.py) (new)
+  - [tests/eval/test_sandbox_security.py](file:///d:/Coding/liteagent/tests/eval/test_sandbox_security.py)
+- **Impact:** any HumanEval pass@1 figure produced before this date is void — it measured the harness, not the model. This affects the Phase 6 dev sanity check and the Phase 7 pilot. No paper results are affected because none had been produced.
+- **Why tests did not catch it:** `tests/eval/test_harness_metrics.py` asserted that a *deliberately failing* sandbox run reports the right failure category, and the sandbox security tests asserted that malicious code is blocked. Nothing asserted that **valid** code runs. `test_sandbox_admits_permitted_stdlib_imports` and `test_reference_solutions_all_pass` close that gap: a sandbox that blocks everything now fails the suite.
+- **Verification:** 95 tests pass. Capability labelling restarted, since the interrupted run had been scoring HumanEval with the broken metric.
+
 ### 2026-09-20 — Multi-Agent Orchestration & Pre-Submission Integrity Fixes
 - **What was done:** Implemented the Planner→Retriever→Executor→Critic chain with real message passing, replacing the previous arrangement where `active_agents` was computed but only its first element was consumed as a cache-partition label (no chain ever executed). Added a typed-message blackboard, four role implementations with prompt construction and output parsing, and an orchestrator that routes once per task and then runs each active agent as its own model call with its own cache session key. Corrected the router accuracy contradiction, re-scoped the novelty claim against newly found competing work, and relabelled the baselines as approximations.
 - **Files touched:**

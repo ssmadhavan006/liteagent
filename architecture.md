@@ -197,6 +197,27 @@ Ollama provides convenient high-level inference APIs but does not expose tensor-
 LiteAgent includes a multi-dataset evaluation harness that isolates executions and profiles energy consumption:
 - **Metrics Tracked**: Extracts Single-Sample Pass@1 for HumanEval, Exact Match (EM) for GSM8K, and token-level Exact Match & F1 scores for HotpotQA.
 - **Subprocess-Level Security Sandboxing**: HumanEval code solutions are executed in isolated Python subprocesses (`python -E -I -S`) with stripped environment variables, strict timeouts, memory limits (RLIMIT_AS), and secondary import/file-write restrictions to prevent unintended system access.
+
+> [!IMPORTANT]
+> **A sandbox must be validated in both directions.** Until 2026-09-20 the guard
+> installed its import hook before loading any permitted module, so permitted
+> imports failed on their transitive dependencies and `from typing import List`
+> was rejected. Combined with executing the completion without its prompt, the
+> HumanEval metric returned 0.0 for every input — including all 80 reference
+> solutions in the subset. The tests only checked that malicious code was
+> blocked, which a sandbox that blocks *everything* also satisfies.
+>
+> The permitted set is now pre-loaded before the hook is installed, and held in
+> a closure over a `frozenset` so solution code cannot widen it. `pass@1`
+> figures produced before this date are void.
+
+### 10.1a. HumanEval Program Assembly
+The prompt supplies the signature, imports and docstring; the model supplies the
+body. `build_program()` therefore executes `prompt + completion`, preserving the
+body's indentation (stripping it unindents only the first line and raises
+`IndentationError` on the next). When a model restates the whole function
+instead of continuing it, the completion is used directly and the prompt's
+import lines are retained, since restated versions usually drop them.
 - **GPU Power Profiling**: Energy consumption is tracked by launching an independent background thread polling `nvidia-smi` every 100ms and integrating power draw over the execution window.
 
 ### 10.3. Energy Measurement

@@ -3,27 +3,50 @@ import sys
 import subprocess
 import tempfile
 
-# Custom import whitelist for secondary protection layer
+# Modules solution code may import. Pure-computation standard library only.
+#
+# These are pre-loaded before the import hook is installed (see the guard
+# below). Installing the hook first breaks the import machinery: loading a
+# module pulls in transitive dependencies such as `enum`, `abc` and `sre_compile`
+# that are not named here, so `from typing import List` -- which opens a large
+# fraction of HumanEval problems -- raised PermissionError and scored every one
+# of those tasks as a failure.
 SAFE_MODULES = {
     "math", "typing", "collections", "re", "string", "datetime",
-    "itertools", "functools", "heapq", "array", "bisect"
+    "itertools", "functools", "heapq", "array", "bisect",
+    "copy", "operator", "fractions", "decimal", "statistics", "enum",
 }
 
 SANDBOX_GUARD_TEMPLATE = """# Layered Sandbox Guard
 import builtins
 import sys
 
-# 1. Custom import hook restricting to safe standard libraries
-_original_import = builtins.__import__
-def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
-    root_module = name.split('.')[0]
-    if root_module not in {safe_modules_repr}:
-        raise PermissionError(f"Import of module '{{name}}' is forbidden in this sandbox.")
-    return _original_import(name, globals, locals, fromlist, level)
+_SAFE = {safe_modules_repr}
 
-builtins.__import__ = _safe_import
+# 1. Pre-load permitted modules while the import system still works.
+#    Afterwards user code resolves them from sys.modules without invoking the
+#    loader, so restricting imports cannot break a permitted module.
+for _m in _SAFE:
+    try:
+        __import__(_m)
+    except ImportError:
+        pass
 
-# 2. Block direct file operations and dangerous builtins
+# 2. Restrict further imports to the permitted set.
+#    The allowlist is captured in a closure over a frozenset rather than read
+#    from a global: a global could be deleted (breaking the hook) or mutated by
+#    solution code to re-admit a blocked module.
+def _make_safe_import(_original, _allowed):
+    def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+        root_module = name.split('.')[0]
+        if root_module not in _allowed:
+            raise PermissionError(f"Import of module '{{name}}' is forbidden in this sandbox.")
+        return _original(name, globals, locals, fromlist, level)
+    return _safe_import
+
+builtins.__import__ = _make_safe_import(builtins.__import__, frozenset(_SAFE))
+
+# 3. Block direct file operations and dangerous builtins
 def _safe_open(*args, **kwargs):
     raise PermissionError("File operations ('open') are forbidden in this sandbox.")
 builtins.open = _safe_open
@@ -35,17 +58,21 @@ for _func_name in ["eval", "exec", "compile", "input", "breakpoint"]:
     if hasattr(builtins, _func_name):
         setattr(builtins, _func_name, _forbidden_builtin)
 
-# 3. Clean up loaded sensitive modules from sys.modules
-for _mod_name in ["os", "io", "subprocess", "shutil", "importlib", "ctypes", "socket", "http", "urllib", "pathlib", "sys"]:
+# 4. Drop capability-bearing modules from sys.modules so they cannot be reached
+#    by lookup. Done after pre-loading, so permitted modules are unaffected.
+#    `sys` itself is removed last; it is not in _SAFE, so re-importing it is
+#    blocked by the hook above.
+for _mod_name in ["os", "io", "subprocess", "shutil", "importlib",
+                  "ctypes", "socket", "http", "urllib", "pathlib", "sys"]:
     sys.modules.pop(_mod_name, None)
 
 # Delete internal helpers from script namespace before running untrusted code
-del sys, _mod_name, _func_name, _forbidden_builtin
+del sys, _m, _mod_name, _func_name, _forbidden_builtin, _SAFE, _make_safe_import
 
-# 4. Execute student code
+# 5. Execute solution code
 {code}
 
-# 5. Execute assertions / tests
+# 6. Execute assertions / tests
 {test_code}
 """
 

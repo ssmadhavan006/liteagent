@@ -1,5 +1,38 @@
 from liteagent.eval.sandbox import run_sandboxed_code
 
+
+def test_sandbox_admits_permitted_stdlib_imports():
+    """
+    A sandbox that rejects valid solutions scores every task as a failure.
+
+    Installing the import hook before loading permitted modules used to break
+    the import machinery, so `from typing import List` - which opens a large
+    share of HumanEval - raised PermissionError and every such task scored 0.
+    """
+    code = """
+from typing import List
+import math, re, collections, itertools, functools
+
+def f(xs: List[int]) -> int:
+    return int(math.fsum(xs))
+"""
+    res = run_sandboxed_code(code, "assert f([1, 2, 3]) == 6")
+    assert res["success"] is True, res["stderr"]
+
+
+def test_allowlist_cannot_be_widened_by_solution_code():
+    """The permitted set is captured in a closure, not a mutable global."""
+    escape = """
+try:
+    _SAFE.add('os')
+except NameError:
+    pass
+import os
+"""
+    res = run_sandboxed_code(escape, "assert True")
+    assert res["success"] is False
+    assert res["failure_category"] == "FAILURE_SANDBOX_VIOLATION"
+
 def test_sandbox_blocks_sys_modules_escape():
     escape_code = """
 import sys

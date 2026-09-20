@@ -80,7 +80,13 @@ def is_correct(benchmark: str, response: str, item: dict) -> tuple[bool, float]:
         scores = score_hotpotqa(response, item.get("answer", ""))
         return bool(scores["f1"] >= HOTPOTQA_F1_THRESHOLD), float(scores["f1"])
     if benchmark == "humaneval":
-        res = score_humaneval(response, item.get("test", ""), timeout=5.0)
+        res = score_humaneval(
+            response,
+            item.get("test", ""),
+            timeout=5.0,
+            prompt=item.get("prompt", ""),
+            entry_point=item.get("entry_point", ""),
+        )
         return bool(res["pass_status"] >= 1.0), float(res["pass_status"])
     raise ValueError(f"Unknown benchmark: {benchmark}")
 
